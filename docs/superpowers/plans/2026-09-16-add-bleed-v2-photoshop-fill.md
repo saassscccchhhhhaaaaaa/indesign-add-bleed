@@ -1,38 +1,42 @@
-# Beschnitt v2 – Füllen über Photoshop – Implementation Plan
+# Add Bleed v2 – Fill via Photoshop – Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Methode „Füllen (Photoshop)“ (inhaltsbasiert/generativ) in `Beschnitt_ergaenzen.jsx` (Spec: `docs/superpowers/specs/2026-09-16-add-bleed-v2-photoshop-fill-design.md`).
+> **Note:** Written for the German first version (`Beschnitt_ergaenzen.jsx`). The prose is translated;
+> the code blocks show the code exactly as planned at that time, including German texts and names.
+> The current code is `AddBleed.jsx`.
 
-**Architecture:** Neue reine Funktionen (Bedarf, Dateiname, Ergebnis-Parser, Grafik-Bounds, Überlappung/Innenrechteck), ein Photoshop-Job `BE.psJob` der per `Function.toString()` zusammen mit seinen Helfern als BridgeTalk-Quelltext gesendet wird, synchroner BridgeTalk-Aufruf, `BE.applyFill` in InDesign, Dialog-/Ablauf-Erweiterung.
+**Goal:** Method "Fill (Photoshop)" (content-aware/generative) in `Beschnitt_ergaenzen.jsx` (spec: `docs/superpowers/specs/2026-09-16-add-bleed-v2-photoshop-fill-design.md`).
+
+**Architecture:** New pure functions (need, file name, result parser, graphic bounds, overlap/inner rectangle), a Photoshop job `BE.psJob` that is sent via `Function.toString()` together with its helpers as BridgeTalk source code, a synchronous BridgeTalk call, `BE.applyFill` in InDesign, dialog/workflow extension.
 
 **Tech Stack:** ExtendScript (InDesign 2026 + Photoshop 2026), BridgeTalk, ScriptUI.
 
 ## Global Constraints
 
-- Alle Regeln aus dem v1-Plan gelten (eine Datei, ES3, `\uXXXX` in Strings – nach jedem Write/Edit mit perl nachescapen, Test-Runner prüft).
-- Methoden-Strings: `"scale"`, `"mirror"`, `"fill-ca"`, `"fill-gen"`.
-- PSD-Ziel: `<Basis>_beschnitt.psd`, dann `-2`, `-3`; nie überschreiben.
-- Sicherheitszugabe `BE.TOLERANZ_PT` (1 mm); Überlappung `min(40, max(8, round(0.01·min(w,h))))` px.
-- Timeouts: 60 s inhaltsbasiert, 180 s generativ, 180 s Photoshop-Start.
-- Tests nutzen nur inhaltsbasiertes Füllen (keine Credits). Generativ nur manuell nach Freigabe.
-- Photoshop-Dokumente, die schon offen sind, nie schließen: Job bricht dann mit Fehler ab.
+- All rules from the v1 plan apply (one file, ES3, `\uXXXX` in strings – re-escape with perl after every Write/Edit, the test runner checks).
+- Method strings: `"scale"`, `"mirror"`, `"fill-ca"`, `"fill-gen"`.
+- PSD target: `<base>_beschnitt.psd`, then `-2`, `-3`; never overwrite.
+- Safety margin `BE.TOLERANZ_PT` (1 mm); overlap `min(40, max(8, round(0.01·min(w,h))))` px.
+- Timeouts: 60 s content-aware, 180 s generative, 180 s Photoshop start.
+- Tests only use content-aware fill (no credits). Generative only by hand after approval.
+- Never close Photoshop documents that are already open: the job stops with an error instead.
 
 ---
 
-### Task 1: Reine Füll-Funktionen
+### Task 1: Pure fill functions
 
-**Files:** Modify `Beschnitt_ergaenzen.jsx` (neuer Abschnitt „Füllen – Geometrie“ nach `BE.mirrorPieces`); Create `test/test_6_fuellen_geometrie.jsx`
+**Files:** Modify `Beschnitt_ergaenzen.jsx` (new section "Füllen – Geometrie" after `BE.mirrorPieces`); Create `test/test_6_fuellen_geometrie.jsx`
 
 **Interfaces – Produces:**
-- `BE.fillNeed(gb, tb, marginPt)` → `{top,left,bottom,right}` Anteile
+- `BE.fillNeed(gb, tb, marginPt)` → `{top,left,bottom,right}` shares
 - `BE.needsFill(need)` → bool
 - `BE.baseName(fileName)` → String
-- `BE.nextFreeName(folderPath, base, exists)` → Pfad; `exists(path)` → bool
+- `BE.nextFreeName(folderPath, base, exists)` → path; `exists(path)` → bool
 - `BE.parsePsResult(s)` → `{ok:true, origW, origH, add:{top,left,bottom,right}}` | `{ok:false, message}`
-- `BE.filledBounds(gb, r)` → Bounds
+- `BE.filledBounds(gb, r)` → bounds
 - `BE.psOverlap(w, h)` → px
-- `BE.psInnerRect(w, h, add, ov)` → `[links, oben, rechts, unten]` px im neuen Bild
+- `BE.psInnerRect(w, h, add, ov)` → `[left, top, right, bottom]` px in the new image
 
 - [ ] **Step 1: Tests** – `test/test_6_fuellen_geometrie.jsx`:
 
@@ -82,8 +86,8 @@ test("psOverlap und psInnerRect", function () {
 });
 ```
 
-- [ ] **Step 2:** `test/run_tests.sh` → FAIL (Funktionen fehlen).
-- [ ] **Step 3: Implementieren** (nach `BE.mirrorPieces`):
+- [ ] **Step 2:** `test/run_tests.sh` → FAIL (functions missing).
+- [ ] **Step 3: Implement** (after `BE.mirrorPieces`):
 
 ```js
 // ---------- Füllen – Geometrie ----------
@@ -153,30 +157,30 @@ BE.psInnerRect = function (w, h, add, ov) {
 };
 ```
 
-- [ ] **Step 4:** Tests → 0 fehlgeschlagen. **Step 5:** Commit „Fuellen: reine Funktionen“.
+- [ ] **Step 4:** Tests → 0 failed. **Step 5:** Commit "Fuellen: reine Funktionen".
 
 ---
 
-### Task 2: Photoshop-Job und BridgeTalk
+### Task 2: Photoshop job and BridgeTalk
 
-**Files:** Modify `Beschnitt_ergaenzen.jsx` (Abschnitt „Photoshop“ nach „Dokument-Helfer“), `test/run_tests.jsx` (Aufräumen alter PSDs); Create `test/test_7_photoshop.jsx`
+**Files:** Modify `Beschnitt_ergaenzen.jsx` (section "Photoshop" after "Dokument-Helfer"), `test/run_tests.jsx` (clean up old PSDs); Create `test/test_7_photoshop.jsx`
 
 **Interfaces – Produces:**
-- `BE.psJob(p)` → String (läuft in Photoshop); `p = {src, dst, need, mode:"contentAware"|"generative", isPdf, pdfPage, pdfCrop}`
+- `BE.psJob(p)` → string (runs in Photoshop); `p = {src, dst, need, mode:"contentAware"|"generative", isPdf, pdfPage, pdfCrop}`
 - `BE.pdfCropName(crop)` → `"BOUNDINGBOX"|"MEDIABOX"|"CROPBOX"|"TRIMBOX"|"BLEEDBOX"|"ARTBOX"`
 - `BE.psSpecifier()` → String|null
-- `BE.psSource(params)` → Quelltext
-- `BE.callPhotoshop(source, timeoutMs)` → Antwort-String (Fehler als `"error|…"`)
-- Runner: `psRun(code)` → Antwort-String (Test-Helfer)
+- `BE.psSource(params)` → source code
+- `BE.callPhotoshop(source, timeoutMs)` → answer string (errors as `"error|…"`)
+- Runner: `psRun(code)` → answer string (test helper)
 
-- [ ] **Step 1: Runner aufräumen** – in `test/run_tests.jsx` direkt nach `FIX.out.create();` einfügen:
+- [ ] **Step 1: Runner clean-up** – insert in `test/run_tests.jsx` right after `FIX.out.create();`:
 
 ```js
     var old = FIX.out.getFiles(function (f) { return /_beschnitt(-\d+)?\.psd$|^tmp_/.test(f.name); });
     for (var o = 0; o < old.length; o++) old[o].remove();
 ```
 
-und nach `pieceAt` den Helfer:
+and after `pieceAt` the helper:
 
 ```js
 // Quelltext in Photoshop ausführen (für Tests)
@@ -268,7 +272,7 @@ test("psJob: fehlende Datei", function () {
 ```
 
 - [ ] **Step 3:** Tests → FAIL.
-- [ ] **Step 4: Implementieren** (nach Abschnitt „Dokument-Helfer“):
+- [ ] **Step 4: Implement** (after the "Dokument-Helfer" section):
 
 ```js
 // ---------- Photoshop ----------
@@ -421,18 +425,18 @@ BE.callPhotoshop = function (source, timeoutMs) {
 };
 ```
 
-- [ ] **Step 5:** perl-Escape, Tests → 0 fehlgeschlagen. Falls der inhaltsbasierte Fill auf der Ebene mit transparentem Rand scheitert: Ursache untersuchen (systematic-debugging), z. B. Rand vor dem Füllen auf „Beschnitt“-Ebene nicht transparent lassen.
-- [ ] **Step 6:** Commit „Photoshop-Job und BridgeTalk“.
+- [ ] **Step 5:** perl escape, tests → 0 failed. If content-aware fill fails on the layer with a transparent edge: investigate the cause (systematic-debugging), e.g. don't leave the edge on the "Beschnitt" layer transparent before filling.
+- [ ] **Step 6:** Commit "Photoshop-Job und BridgeTalk".
 
 ---
 
 ### Task 3: applyFill in InDesign
 
-**Files:** Modify `Beschnitt_ergaenzen.jsx` (`BE.checkFillable`, `BE.applyFill` nach `BE.applyMirror`; `BE.processFrame`, `BE.process`, `BE.formatSummary`); Create `test/test_8_fuellen.jsx`
+**Files:** Modify `Beschnitt_ergaenzen.jsx` (`BE.checkFillable`, `BE.applyFill` after `BE.applyMirror`; `BE.processFrame`, `BE.process`, `BE.formatSummary`); Create `test/test_8_fuellen.jsx`
 
 **Interfaces:**
 - Consumes: Task 1 + 2
-- Produces: `BE.checkFillable(frame)` → Grund|null; `BE.applyFill(frame, fb, tb, mode)` → Grund|null (legt Pfad in `BE.createdFiles` ab); `BE.process(items, method, bleed, onProgress)` → `{done, skipped, created}`; `onProgress(i, n, name)` optional
+- Produces: `BE.checkFillable(frame)` → reason|null; `BE.applyFill(frame, fb, tb, mode)` → reason|null (stores the path in `BE.createdFiles`); `BE.process(items, method, bleed, onProgress)` → `{done, skipped, created}`; `onProgress(i, n, name)` optional
 
 - [ ] **Step 1: Tests** – `test/test_8_fuellen.jsx`:
 
@@ -489,7 +493,7 @@ test("process: Fuellen meldet neue PSD-Dateien", function () {
 ```
 
 - [ ] **Step 2:** Tests → FAIL.
-- [ ] **Step 3: Implementieren** – nach `BE.applyMirror`:
+- [ ] **Step 3: Implement** – after `BE.applyMirror`:
 
 ```js
 BE.createdFiles = [];
@@ -533,7 +537,7 @@ BE.applyFill = function (frame, fb, tb, mode) {
 };
 ```
 
-`BE.processFrame` letzte Zeile ersetzen durch:
+Replace the last line of `BE.processFrame` with:
 
 ```js
     if (method === "mirror") return BE.applyMirror(frame, fb, t);
@@ -543,7 +547,7 @@ BE.applyFill = function (frame, fb, tb, mode) {
     return BE.applyScale(frame, fb, t.target);
 ```
 
-`BE.process` ersetzen durch:
+Replace `BE.process` with:
 
 ```js
 BE.process = function (items, method, bleed, onProgress) {
@@ -568,7 +572,7 @@ BE.process = function (items, method, bleed, onProgress) {
 };
 ```
 
-In `BE.formatSummary` vor `return s;`:
+In `BE.formatSummary` before `return s;`:
 
 ```js
     if (res.created && res.created.length) {
@@ -577,16 +581,16 @@ In `BE.formatSummary` vor `return s;`:
     }
 ```
 
-- [ ] **Step 4:** perl-Escape, Tests → 0 fehlgeschlagen. Der Missing-Link-Test: falls InDesign den Status erst nach Prüfung aktualisiert, im Test vor der Prüfung `doc.links.everyItem().getElements()` abfragen bzw. kurz warten – nicht die Produktlogik aufweichen.
-- [ ] **Step 5:** Commit „Fuellen in InDesign“.
+- [ ] **Step 4:** perl escape, tests → 0 failed. Missing-link test: if InDesign only updates the status after a check, query `doc.links.everyItem().getElements()` or wait briefly in the test before checking – do not weaken the product logic.
+- [ ] **Step 5:** Commit "Fuellen in InDesign".
 
 ---
 
-### Task 4: Dialog, Fortschritt, Ablauf, Doku
+### Task 4: Dialog, progress, workflow, docs
 
-**Files:** Modify `Beschnitt_ergaenzen.jsx` (`BE.askMethod`, `BE.run`, neues `BE.progress`), `README.md`
+**Files:** Modify `Beschnitt_ergaenzen.jsx` (`BE.askMethod`, `BE.run`, new `BE.progress`), `README.md`
 
-- [ ] **Step 1: `BE.askMethod` ersetzen:**
+- [ ] **Step 1: Replace `BE.askMethod`:**
 
 ```js
 BE.askMethod = function (bleed) {
@@ -630,7 +634,7 @@ BE.askMethod = function (bleed) {
 };
 ```
 
-- [ ] **Step 2: Fortschritt** – nach `BE.askMethod`:
+- [ ] **Step 2: Progress** – after `BE.askMethod`:
 
 ```js
 // Fortschrittsfenster; liefert {update(i, n, name), close()}
@@ -653,7 +657,7 @@ BE.progress = function (total) {
 };
 ```
 
-- [ ] **Step 3: `BE.run` anpassen** – nach `if (!method) return;`:
+- [ ] **Step 3: Adjust `BE.run`** – after `if (!method) return;`:
 
 ```js
     var isFill = method === "fill-ca" || method === "fill-gen", prog = null;
@@ -674,10 +678,10 @@ BE.progress = function (total) {
     alert(BE.formatSummary(res), "Beschnitt ergänzen");
 ```
 
-(den bisherigen `BE.runUndoable(...)`-Block und das `alert` am Ende ersetzen).
+(replace the previous `BE.runUndoable(...)` block and the `alert` at the end).
 
-- [ ] **Step 4:** perl-Escape; Tests → 0 fehlgeschlagen; Syntax des Dialogs prüfen: Script per `osascript` mit `BE_TEST` laden und `BE.askMethod` **nicht** aufrufen (Dialog ist manuell zu testen).
-- [ ] **Step 5: README** – Abschnitt „Methoden“ ergänzen:
+- [ ] **Step 4:** perl escape; tests → 0 failed; check the dialog syntax: load the script via `osascript` with `BE_TEST` and do **not** call `BE.askMethod` (the dialog is tested by hand).
+- [ ] **Step 5: README** – extend the "Methoden" section:
 
 ```markdown
 - **Füllen (Photoshop):** fehlendes Bild wird in Photoshop ergänzt – *inhaltsbasiert*
@@ -688,5 +692,5 @@ BE.progress = function (total) {
   Rückgängigmachen erhalten.
 ```
 
-- [ ] **Step 6:** Commit „Dialog und Fortschritt fuer Fuellen“; Push.
-- [ ] **Step 7: Manuell mit Nutzer:** Dialog; inhaltsbasiert an echtem Foto; generativ **nur nach Freigabe** (Credits) an RGB- und ggf. CMYK-Bild.
+- [ ] **Step 6:** Commit "Dialog und Fortschritt fuer Fuellen"; push.
+- [ ] **Step 7: By hand with the user:** dialog; content-aware on a real photo; generative **only after approval** (credits) on an RGB and possibly a CMYK image.

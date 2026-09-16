@@ -93,7 +93,7 @@ automatically – generative fill uses credits and is checked by hand. InDesign 
 unresponsive while the tests wait for Photoshop.
 
 Write non-ASCII characters in string literals as `\uXXXX` – ExtendScript reads them
-incorrectly otherwise (the test runner checks this). Design notes (in German):
+incorrectly otherwise (the test runner checks this). Design notes:
 [`docs/superpowers/`](docs/superpowers/README.md).
 
 ## License

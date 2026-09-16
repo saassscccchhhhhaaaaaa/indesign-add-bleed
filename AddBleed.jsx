@@ -2,7 +2,7 @@
 /*
     AddBleed.jsx - Version 2.1.0
     Author: Sascha Fronczek - https://saschafronczek.de
-    License: MIT (see LICENSE) - Bugs and ideas: https://github.com/saassscccchhhhhaaaaaa/indesign-beschnitt-ergaenzen/issues
+    License: MIT (see LICENSE) - Bugs and ideas: https://github.com/saassscccchhhhhaaaaaa/indesign-add-bleed/issues
 
     Adds bleed to the selected image frames on the edges that touch the page edge.
     Methods: scale, mirror, or fill via Photoshop (content-aware / generative).

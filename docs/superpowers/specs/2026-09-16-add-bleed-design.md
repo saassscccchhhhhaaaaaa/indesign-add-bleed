@@ -1,76 +1,79 @@
-# Beschnitt_ergaenzen.jsx – Design (Version 1)
+# Add Bleed – Design (version 1)
 
-## Ziel
-InDesign-Script, das bei ausgewählten Bildrahmen (Bild, PDF, AI …) Beschnitt an den
-Kanten ergänzt, die am Seitenrand liegen. Zwei Methoden: **Skalieren** und **Spiegeln**.
-Füllen über Photoshop (inhaltsbasiert/generativ) ist Version 2 und nicht Teil dieses Designs.
+> Written for version 1, when the script was still called `Beschnitt_ergaenzen.jsx`.
+> Since 2.1.0 it is `AddBleed.jsx` with a German/English UI.
 
-## Rahmenbedingungen
-- ExtendScript (`.jsx`), eine einzige Datei, lauffähig in InDesign 2025 und 2026.
-- Quelle: `Bleed_Area/Beschnitt_ergaenzen.jsx`; Nutzung über Alias im Scripts-Panel-Ordner
+## Goal
+InDesign script that adds bleed to the selected image frames (image, PDF, AI …) on the
+edges that touch the page edge. Two methods: **Scale** and **Mirror**.
+Filling via Photoshop (content-aware/generative) is version 2 and not part of this design.
+
+## Constraints
+- ExtendScript (`.jsx`), a single file, runs in InDesign 2025 and 2026.
+- Source: `Bleed_Area/Beschnitt_ergaenzen.jsx`; used via an alias in the Scripts Panel folder
   `~/Library/Preferences/Adobe InDesign/Version 21.0/de_DE/Scripts/Scripts Panel/`.
-- Gesamter Durchlauf als ein Undo-Schritt (`app.doScript(..., UndoModes.ENTIRE_SCRIPT)`).
-- Intern Maßeinheit Punkt; Original-Maßeinheiten und Linealursprung werden in `finally` wiederhergestellt.
+- The whole run is one undo step (`app.doScript(..., UndoModes.ENTIRE_SCRIPT)`).
+- Points as the internal unit; the original units and ruler origin are restored in `finally`.
 
-## Ablauf
-1. **Auswahl prüfen**
-   - Kein Dokument / keine Auswahl → Meldung, Abbruch.
-   - Akzeptiert: rechteckige Rahmen (Rectangle, oder Polygon mit 4 rechtwinkligen Punkten),
-     die genau eine Grafik enthalten. Ist die Grafik selbst ausgewählt, wird ihr Elternrahmen verwendet.
-   - Übersprungen (mit Grund): leere Rahmen, Textrahmen, Gruppen, Rahmen mit Drehung
-     oder Scherung ≠ 0, alle anderen Formen (Ovale, Polygone mit ≠ 4 Punkten, mehrere Pfade).
-   - Keine gültigen Rahmen → Meldung, Abbruch.
-2. **Dialog (ScriptUI)**: Radiobuttons „Skalieren“ (Vorauswahl) / „Spiegeln“; Anzeige der
-   Beschnittwerte des Dokuments in mm; OK / Abbrechen.
-3. **Beschnitt auslesen** aus `documentPreferences`:
+## Flow
+1. **Check the selection**
+   - No document / no selection → message, stop.
+   - Accepted: rectangular frames (Rectangle, or Polygon with 4 right-angled points)
+     that contain exactly one graphic. If the graphic itself is selected, its parent frame is used.
+   - Skipped (with reason): empty frames, text frames, groups, frames with rotation
+     or shear ≠ 0, all other shapes (ovals, polygons with ≠ 4 points, multiple paths).
+   - No valid frames → message, stop.
+2. **Dialog (ScriptUI)**: radio buttons "Scale" (default) / "Mirror"; shows the
+   document bleed in mm; OK / Cancel.
+3. **Read the bleed** from `documentPreferences`:
    `documentBleedTopOffset`, `documentBleedBottomOffset`,
    `documentBleedInsideOrLeftOffset`, `documentBleedOutsideOrRightOffset`.
-   Alle vier = 0 → Meldung, Abbruch.
-   Zuordnung links/rechts pro Rahmen über `parentPage.side`:
-   - `RIGHT_HAND` oder `SINGLE_SIDED`: links = inside, rechts = outside.
-   - `LEFT_HAND`: links = outside, rechts = inside.
-   Bei Rahmen über zwei Seiten gilt: linke Kante nach der Seite, auf der sie liegt, rechte
-   Kante ebenso. (Innen-Kanten werden ohnehin durch Schritt 4 ausgeschlossen.)
-4. **Kanten erkennen** (Toleranz 1 mm = 2,835 pt, `geometricBounds`):
-   - oben: |Rahmen.oben − Seite.oben| ≤ Toleranz
-   - unten: |Rahmen.unten − Seite.unten| ≤ Toleranz
-   - links: |Rahmen.links − Druckbogen.links| ≤ Toleranz
-   - rechts: |Rahmen.rechts − Druckbogen.rechts| ≤ Toleranz
-   „Seite“ = Seite, auf der die jeweilige Kante liegt; „Druckbogen“ = äußere Grenzen aller
-   Seiten des Druckbogens. Damit bekommt der Bund nie Beschnitt.
-   Eine Kante mit Beschnittwert 0 zählt nicht als erkannt.
-   Keine Kante erkannt → Rahmen übersprungen („liegt nicht am Seitenrand“).
-5. **Beschnitt ergänzen** (siehe Methoden). Zielgrenzen: Kanten werden auf
-   Seiten-/Druckbogenrand + Beschnitt gesetzt (nicht Rahmenkante + Beschnitt), damit
-   Rahmen innerhalb der Toleranz sauber an der Beschnittkante landen.
-6. **Zusammenfassung**: Anzahl bearbeitet / übersprungen, jeweils mit Grund.
+   All four = 0 → message, stop.
+   Left/right mapping per frame via `parentPage.side`:
+   - `RIGHT_HAND` or `SINGLE_SIDED`: left = inside, right = outside.
+   - `LEFT_HAND`: left = outside, right = inside.
+   For frames spanning two pages: the left edge follows the page it lies on, the right
+   edge likewise. (Inner edges are excluded by step 4 anyway.)
+4. **Detect edges** (tolerance 1 mm = 2.835 pt, `geometricBounds`):
+   - top: |frame.top − page.top| ≤ tolerance
+   - bottom: |frame.bottom − page.bottom| ≤ tolerance
+   - left: |frame.left − spread.left| ≤ tolerance
+   - right: |frame.right − spread.right| ≤ tolerance
+   "Page" = the page the edge lies on; "spread" = outer bounds of all pages of the
+   spread. This way the spine never gets bleed.
+   An edge whose bleed value is 0 does not count as detected.
+   No edge detected → frame skipped ("not at the page edge").
+5. **Add bleed** (see methods). Target bounds: edges are set to page/spread edge + bleed
+   (not frame edge + bleed), so frames within the tolerance end up exactly on the
+   bleed edge.
+6. **Summary**: number processed / skipped, each with its reason.
 
-## Methode „Skalieren“
-- Zielrahmen T = Rahmen, an den erkannten Kanten auf Beschnittkante erweitert.
-- Grafikgrenzen G (`graphic.geometricBounds`). Deckt G das Rechteck T komplett ab →
-  nur Rahmen auf T setzen, Grafik bleibt unverändert.
-- Sonst Faktor s (≥ 1) um die Mitte C des ursprünglichen Rahmens berechnen, sodass die
-  skalierte Grafik T abdeckt; pro Seite z. B. oben: s ≥ (C.y − T.oben) / (C.y − G.oben),
-  entsprechend für unten/links/rechts; s = Maximum. Grafik mit s um C skalieren
-  (proportional), danach Rahmen auf T setzen.
+## Method "Scale"
+- Target frame T = frame, extended to the bleed edge on the detected edges.
+- Graphic bounds G (`graphic.geometricBounds`). If G fully covers T →
+  only set the frame to T, the graphic stays unchanged.
+- Otherwise compute a factor s (≥ 1) around the centre C of the original frame so that
+  the scaled graphic covers T; per side, e.g. top: s ≥ (C.y − T.top) / (C.y − G.top),
+  likewise for bottom/left/right; s = maximum. Scale the graphic by s around C
+  (proportionally), then set the frame to T.
 
-## Methode „Spiegeln“
-- Für jede erkannte Kante: Rahmen duplizieren, Duplikat an der Kantenlinie spiegeln
-  (links/rechts horizontal, oben/unten vertikal), Duplikat-Rahmen auf den Streifen
-  zwischen Kante und Beschnittkante zuschneiden (Grafik bleibt dabei an ihrer Position).
-- Für jedes Paar benachbarter erkannter Kanten (oben-links, oben-rechts, unten-links,
-  unten-rechts): Duplikat in beide Richtungen spiegeln, auf das Eckquadrat zuschneiden.
-- Streifen/Ecken: Kontur entfernen (`strokeWeight = 0`), Textumfluss aus.
-- Original und alle Streifen/Ecken gruppieren. Original bleibt unverändert.
+## Method "Mirror"
+- For each detected edge: duplicate the frame, mirror the duplicate at the edge line
+  (left/right horizontally, top/bottom vertically), crop the duplicate frame to the strip
+  between edge and bleed edge (the graphic keeps its position).
+- For each pair of adjacent detected edges (top-left, top-right, bottom-left,
+  bottom-right): mirror a duplicate in both directions, crop it to the corner square.
+- Strips/corners: remove the stroke (`strokeWeight = 0`), text wrap off.
+- Group the original and all strips/corners. The original stays unchanged.
 
-## Fehlerbehandlung
-- Fehler bei einem Rahmen → Rahmen übersprungen, Fehlertext in Zusammenfassung,
-  übrige Rahmen werden weiter bearbeitet.
-- Einstellungen werden immer wiederhergestellt.
+## Error handling
+- Error in one frame → frame skipped, error text in the summary,
+  the remaining frames are still processed.
+- Settings are always restored.
 
-## Test
-Automatisiert per AppleScript (`do script … language javascript`) gegen InDesign 2026:
-Testdokument erzeugen (einseitig und doppelseitig, Beschnitt gleich und unterschiedlich,
-Rahmen an Rand / Bund / innen / über Doppelseite, Grafik mit und ohne Überstand),
-Script-Logik ausführen, resultierende Bounds gegen erwartete Werte prüfen.
-Manuelle Sichtkontrolle mit echtem Bild und PDF durch den Nutzer.
+## Tests
+Automated via AppleScript (`do script … language javascript`) against InDesign 2026:
+create test documents (single and facing pages, equal and different bleed,
+frames at the edge / spine / inside / across a spread, graphic with and without
+overlap), run the script logic, compare the resulting bounds with expected values.
+Visual check with a real image and PDF by the user.
