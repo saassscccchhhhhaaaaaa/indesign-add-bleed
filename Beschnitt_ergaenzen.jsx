@@ -77,6 +77,72 @@ BE.mirrorPieces = function (fb, tb, e) {
     return p;
 };
 
+// ---------- Füllen – Geometrie ----------
+
+// Fehlende Anteile je Seite (bezogen auf Grafikhöhe/-breite), inkl. Sicherheitszugabe.
+BE.fillNeed = function (gb, tb, marginPt) {
+    var h = gb[2] - gb[0], w = gb[3] - gb[1];
+    function part(miss, size) { return miss > BE.EPS ? (miss + marginPt) / size : 0; }
+    return {
+        top: part(gb[0] - tb[0], h),
+        left: part(gb[1] - tb[1], w),
+        bottom: part(tb[2] - gb[2], h),
+        right: part(tb[3] - gb[3], w)
+    };
+};
+
+BE.needsFill = function (n) {
+    return n.top > 0 || n.left > 0 || n.bottom > 0 || n.right > 0;
+};
+
+BE.baseName = function (fileName) {
+    var i = fileName.lastIndexOf(".");
+    return i > 0 ? fileName.substring(0, i) : fileName;
+};
+
+BE.nextFreeName = function (folderPath, base, exists) {
+    var path = folderPath + "/" + base + "_beschnitt.psd", i = 2;
+    while (exists(path)) {
+        path = folderPath + "/" + base + "_beschnitt-" + i + ".psd";
+        i++;
+    }
+    return path;
+};
+
+// Antwort des Photoshop-Jobs: "ok|origW|origH|top|left|bottom|right" oder "error|Meldung"
+BE.parsePsResult = function (s) {
+    var p = String(s).split("|");
+    if (p[0] === "ok" && p.length === 7) {
+        return {
+            ok: true, origW: Number(p[1]), origH: Number(p[2]),
+            add: { top: Number(p[3]), left: Number(p[4]), bottom: Number(p[5]), right: Number(p[6]) }
+        };
+    }
+    if (p[0] === "error") return { ok: false, message: p.slice(1).join("|") };
+    return { ok: false, message: "unerwartete Antwort: " + s };
+};
+
+// Grafik-Bounds nach dem Neuverknüpfen, damit die Originalpixel an ihrer Stelle bleiben.
+BE.filledBounds = function (gb, r) {
+    var px = (gb[3] - gb[1]) / r.origW, py = (gb[2] - gb[0]) / r.origH;
+    return [gb[0] - r.add.top * py, gb[1] - r.add.left * px, gb[2] + r.add.bottom * py, gb[3] + r.add.right * px];
+};
+
+// Überlappung in px, damit die Füllung ohne Naht ins Bild übergeht.
+BE.psOverlap = function (w, h) {
+    return Math.min(40, Math.max(8, Math.round(0.01 * Math.min(w, h))));
+};
+
+// Rechteck, das nicht gefüllt wird: Originalbereich, an ergänzten Seiten um ov verkleinert.
+BE.psInnerRect = function (w, h, add, ov) {
+    return [
+        add.left + (add.left > 0 ? ov : 0),
+        add.top + (add.top > 0 ? ov : 0),
+        add.left + w - (add.right > 0 ? ov : 0),
+        add.top + h - (add.bottom > 0 ? ov : 0)
+    ];
+};
+
 // ---------- Dokument-Helfer ----------
 
 BE.GRAPHIC_TYPES = { Image: 1, PDF: 1, EPS: 1, ImportedPage: 1, PICT: 1, WMF: 1, Graphic: 1 };
