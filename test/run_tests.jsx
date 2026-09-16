@@ -47,6 +47,13 @@ function pieceAt(grp, bounds) {
     return null;
 }
 
+// Quelltext in Photoshop ausfuehren (fuer Tests)
+// Photoshop-Dialoge sind dabei ausgeschaltet, damit nichts blockiert.
+function psRun(code) {
+    return BE.callPhotoshop("(function(){var dd=app.displayDialogs;app.displayDialogs=DialogModes.NO;" +
+        "try{return eval(String(" + code.toSource() + "));}finally{app.displayDialogs=dd;}})()", 60000);
+}
+
 var FIX = { docs: [] };
 FIX.out = Folder(TEST_DIR.fsName + "/output");
 FIX.png = File(FIX.out.fsName + "/fixture.png");
@@ -103,6 +110,8 @@ try {
     app.scriptPreferences.userInteractionLevel = UserInteractionLevels.NEVER_INTERACT;
     app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
     FIX.out.create();
+    var old = FIX.out.getFiles(function (f) { return /_beschnitt(-\d+)?\.psd$|^tmp_/.test(f.name); });
+    for (var o = 0; o < old.length; o++) old[o].remove();
     FIX.makeSources();
     var testFiles = TEST_DIR.getFiles("test_*.jsx");
     testFiles.sort(function (x, y) { return x.name < y.name ? -1 : 1; });

@@ -226,6 +226,156 @@ BE.resolveFrame = function (item) {
     return { frame: item, reason: null };
 };
 
+// ---------- Photoshop ----------
+
+BE.pdfCropName = function (crop) {
+    if (crop == PDFCrop.CROP_MEDIA) return "MEDIABOX";
+    if (crop == PDFCrop.CROP_PDF) return "CROPBOX";
+    if (crop == PDFCrop.CROP_TRIM) return "TRIMBOX";
+    if (crop == PDFCrop.CROP_BLEED) return "BLEEDBOX";
+    if (crop == PDFCrop.CROP_ART) return "ARTBOX";
+    return "BOUNDINGBOX";
+};
+
+// Läuft in Photoshop (wird als Quelltext gesendet). Rückgabe siehe BE.parsePsResult.
+BE.psJob = function (p) {
+    var saved = { dialogs: app.displayDialogs, units: app.preferences.rulerUnits };
+    var doc = null, src = File(p.src), i, fn, po, w, h, add, ov, r, layer, d, ref, clio, opts, so;
+    function s(id) { return stringIDToTypeID(id); }
+    function c(id) { return charIDToTypeID(id); }
+    try {
+        if (!src.exists) return "error|Datei nicht gefunden: " + src.fsName;
+        for (i = 0; i < app.documents.length; i++) {
+            fn = null;
+            try { fn = app.documents[i].fullName.fsName; } catch (e0) {}
+            if (fn === src.fsName) return "error|Datei ist in Photoshop ge\u00f6ffnet, bitte dort schlie\u00dfen";
+        }
+        app.displayDialogs = DialogModes.NO;
+        app.preferences.rulerUnits = Units.PIXELS;
+        if (p.isPdf) {
+            po = new PDFOpenOptions();
+            po.resolution = 300;
+            po.antiAlias = true;
+            po.usePageNumber = true;
+            po.page = p.pdfPage;
+            po.cropPage = CropToType[p.pdfCrop];
+            doc = app.open(src, po);
+        } else {
+            doc = app.open(src);
+        }
+        if (doc.mode == DocumentMode.INDEXEDCOLOR) doc.changeMode(ChangeMode.RGB);
+        w = doc.width.as("px");
+        h = doc.height.as("px");
+        doc.flatten();
+        if (doc.activeLayer.isBackgroundLayer) doc.activeLayer.isBackgroundLayer = false;
+        doc.activeLayer.name = "Original";
+
+        add = {
+            top: Math.ceil(p.need.top * h), left: Math.ceil(p.need.left * w),
+            bottom: Math.ceil(p.need.bottom * h), right: Math.ceil(p.need.right * w)
+        };
+        if (add.top || add.left) {
+            doc.resizeCanvas(UnitValue(w + add.left, "px"), UnitValue(h + add.top, "px"), AnchorPosition.BOTTOMRIGHT);
+        }
+        if (add.bottom || add.right) {
+            doc.resizeCanvas(UnitValue(w + add.left + add.right, "px"), UnitValue(h + add.top + add.bottom, "px"), AnchorPosition.TOPLEFT);
+        }
+        ov = BE.psOverlap(w, h);
+        r = BE.psInnerRect(w, h, add, ov);
+        doc.selection.selectAll();
+        doc.selection.select([[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]], SelectionType.DIMINISH);
+
+        if (p.mode === "generative") {
+            ref = new ActionReference();
+            ref.putEnumerated(s("document"), s("ordinal"), s("targetEnum"));
+            clio = new ActionDescriptor();
+            clio.putString(s("gi_PROMPT"), "");
+            clio.putInteger(s("gi_NUM_STEPS"), -1);
+            clio.putInteger(s("gi_GUIDANCE"), 6);
+            clio.putInteger(s("gi_SIMILARITY"), 0);
+            clio.putBoolean(s("gi_CROP"), false);
+            clio.putBoolean(s("gi_DILATE"), false);
+            clio.putInteger(s("gi_CONTENT_PRESERVE"), 0);
+            clio.putBoolean(s("gi_ENABLE_PROMPT_FILTER"), true);
+            clio.putBoolean(s("dualCrop"), true);
+            clio.putString(s("gi_ADVANCED"), '{"enable_mts":true}');
+            opts = new ActionDescriptor();
+            opts.putObject(s("clio"), s("clio"), clio);
+            d = new ActionDescriptor();
+            d.putReference(s("null"), ref);
+            d.putInteger(s("documentID"), doc.id);
+            d.putInteger(s("layerID"), doc.activeLayer.id);
+            d.putString(s("prompt"), "");
+            d.putString(s("serviceID"), "clio");
+            d.putObject(s("serviceOptionsList"), s("target"), opts);
+            executeAction(s("syntheticFill"), d, DialogModes.NO);
+        } else {
+            layer = doc.activeLayer.duplicate();
+            layer.name = "Beschnitt";
+            doc.activeLayer = layer;
+            d = new ActionDescriptor();
+            d.putEnumerated(c("Usng"), c("FlCn"), s("contentAware"));
+            d.putUnitDouble(c("Opct"), c("#Prc"), 100);
+            d.putEnumerated(c("Md  "), c("BlnM"), c("Nrml"));
+            executeAction(c("Fl  "), d, DialogModes.NO);
+            doc.selection.invert();
+            doc.selection.clear();
+        }
+        doc.selection.deselect();
+        so = new PhotoshopSaveOptions();
+        so.layers = true;
+        so.embedColorProfile = true;
+        doc.saveAs(File(p.dst), so, true);
+        return ["ok", w, h, add.top, add.left, add.bottom, add.right].join("|");
+    } catch (e) {
+        return "error|" + e.message;
+    } finally {
+        if (doc) { try { doc.close(SaveOptions.DONOTSAVECHANGES); } catch (e1) {} }
+        app.displayDialogs = saved.dialogs;
+        app.preferences.rulerUnits = saved.units;
+    }
+};
+
+BE.psSpecifier = function () {
+    return BridgeTalk.getSpecifier("photoshop") || null;
+};
+
+BE.psSource = function (params) {
+    return "var BE = {};\n" +
+        "BE.psOverlap = " + BE.psOverlap.toString() + ";\n" +
+        "BE.psInnerRect = " + BE.psInnerRect.toString() + ";\n" +
+        "BE.psJob = " + BE.psJob.toString() + ";\n" +
+        "BE.psJob(" + params.toSource() + ");";
+};
+
+// Sendet Quelltext an Photoshop und wartet auf die Antwort.
+BE.callPhotoshop = function (source, timeoutMs) {
+    var spec = BE.psSpecifier(), bt, res = null, err = null, t0;
+    if (!spec) return "error|Photoshop wurde nicht gefunden";
+    if (!BridgeTalk.isRunning(spec)) {
+        BridgeTalk.launch(spec);
+        t0 = new Date().getTime();
+        while (!BridgeTalk.isRunning(spec)) {
+            if (new Date().getTime() - t0 > 180000) return "error|Photoshop startet nicht";
+            $.sleep(500);
+        }
+    }
+    bt = new BridgeTalk();
+    bt.target = spec;
+    // BridgeTalk verändert Backslashes im Text – daher kodiert übertragen.
+    bt.body = "eval(unescape('" + escape(source) + "'));";
+    bt.onResult = function (m) { res = m.body; };
+    bt.onError = function (m) { err = m.body; };
+    t0 = new Date().getTime();
+    bt.send();
+    while (res === null && err === null) {
+        if (new Date().getTime() - t0 > timeoutMs) return "error|Zeit\u00fcberschreitung (" + Math.round(timeoutMs / 1000) + " s)";
+        BridgeTalk.pump();
+        $.sleep(100);
+    }
+    return res !== null ? res : "error|" + err;
+};
+
 // ---------- Methoden ----------
 
 // Rahmen auf neue Grenzen setzen, ohne dass der Inhalt mitgeht.
