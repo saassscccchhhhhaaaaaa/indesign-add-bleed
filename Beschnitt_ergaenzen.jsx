@@ -160,6 +160,39 @@ BE.resolveFrame = function (item) {
     return { frame: item, reason: null };
 };
 
+// ---------- Methoden ----------
+
+// Rahmen auf neue Grenzen setzen, ohne dass der Inhalt mitgeht.
+BE.setFrameBounds = function (frame, b) {
+    var fo = frame.frameFittingOptions, auto = fo.autoFit;
+    fo.autoFit = false;
+    frame.geometricBounds = b;
+    fo.autoFit = auto;
+};
+
+BE.applyScale = function (frame, fb, tb) {
+    var g = frame.allGraphics[0], gb = g.geometricBounds, s;
+    if (!BE.covers(gb, tb)) {
+        if (Math.abs(g.rotationAngle) > BE.EPS || Math.abs(g.shearAngle) > BE.EPS) {
+            return "Grafik im Rahmen gedreht oder verzerrt";
+        }
+        s = BE.scaleFactor(fb, gb, tb);
+        if (s === null) return "Grafik deckt die Rahmenmitte nicht ab";
+        g.geometricBounds = BE.scaleBounds(gb, (fb[0] + fb[2]) / 2, (fb[1] + fb[3]) / 2, s);
+    }
+    BE.setFrameBounds(frame, tb);
+    return null;
+};
+
+// Bearbeitet einen geprüften Rahmen. Rückgabe: null oder Grund fürs Überspringen.
+BE.processFrame = function (frame, method, bleed) {
+    var info = BE.pageInfo(frame), fb = frame.geometricBounds;
+    var t = BE.computeTarget(fb, info.page, info.spreadLeft, info.spreadRight,
+        info.leftSide, info.rightSide, bleed, BE.TOLERANZ_PT);
+    if (!t.any) return "liegt nicht am Seitenrand (oder hat schon Beschnitt)";
+    return method === "mirror" ? BE.applyMirror(frame, fb, t) : BE.applyScale(frame, fb, t.target);
+};
+
 // ---------- Start ----------
 
 if (!$.global.BE_TEST) {
