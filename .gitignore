@@ -1,3 +1,33 @@
+# macOS / Windows
 .DS_Store
+._*
+Icon?
+Thumbs.db
+desktop.ini
+
+# Dropbox
+.dropbox
+.dropbox.attr
+*(Konflikt*)*
+*(conflicted copy*)*
+
+# InDesign / Photoshop
 *.idlk
+*.indd
+*.idml
+*_beschnitt.psd
+*_beschnitt-*.psd
+
+# Kompilierte Scripte (werden als Release-Datei verteilt, nicht im Code)
+*.jsxbin
+
+# Editoren
+.vscode/
+.idea/
+*.swp
+
+# Claude Code (lokale Einstellungen)
+.claude/
+
+# Testausgaben
 test/output/
