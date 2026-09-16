@@ -418,13 +418,57 @@ BE.applyMirror = function (frame, fb, t) {
     return null;
 };
 
+BE.createdFiles = [];
+
+BE.checkFillable = function (frame) {
+    var g = frame.allGraphics[0], t = g.constructor.name, link = g.itemLink;
+    if (t !== "Image" && t !== "PDF") return "Dateityp wird f\u00fcr F\u00fcllen nicht unterst\u00fctzt";
+    if (!link || link.status != LinkStatus.NORMAL) return "Verkn\u00fcpfung fehlt oder ist nicht aktuell";
+    if (Math.abs(g.rotationAngle) > BE.EPS || Math.abs(g.shearAngle) > BE.EPS || g.absoluteFlip != Flip.NONE) {
+        return "Grafik im Rahmen gedreht oder gespiegelt";
+    }
+    return null;
+};
+
+// Fehlendes Bild in Photoshop ergänzen, neue PSD verknüpfen, Rahmen erweitern.
+BE.applyFill = function (frame, fb, tb, mode) {
+    var reason = BE.checkFillable(frame), g, gb, need, link, src, dst, params, r;
+    if (reason) return reason;
+    g = frame.allGraphics[0];
+    gb = g.geometricBounds;
+    need = BE.fillNeed(gb, tb, BE.TOLERANZ_PT);
+    if (!BE.needsFill(need)) {
+        BE.setFrameBounds(frame, tb);
+        return null;
+    }
+    link = g.itemLink;
+    src = File(link.filePath);
+    dst = BE.nextFreeName(src.parent.fsName, BE.baseName(src.name), function (path) { return File(path).exists; });
+    params = { src: src.fsName, dst: dst, need: need, mode: mode, isPdf: g.constructor.name === "PDF", pdfPage: 1, pdfCrop: "BOUNDINGBOX" };
+    if (params.isPdf) {
+        params.pdfPage = g.pdfAttributes.pageNumber;
+        params.pdfCrop = BE.pdfCropName(g.pdfAttributes.pdfCrop);
+    }
+    r = BE.parsePsResult(BE.callPhotoshop(BE.psSource(params), mode === "generative" ? 180000 : 60000));
+    if (!r.ok) return "Photoshop: " + r.message;
+    BE.createdFiles.push(dst);
+    link.relink(File(dst));
+    frame.allGraphics[0].geometricBounds = BE.filledBounds(gb, r);
+    BE.setFrameBounds(frame, tb);
+    return null;
+};
+
 // Bearbeitet einen geprüften Rahmen. Rückgabe: null oder Grund fürs Überspringen.
 BE.processFrame = function (frame, method, bleed) {
     var info = BE.pageInfo(frame), fb = frame.geometricBounds;
     var t = BE.computeTarget(fb, info.page, info.spreadLeft, info.spreadRight,
         info.leftSide, info.rightSide, bleed, BE.TOLERANZ_PT);
     if (!t.any) return "liegt nicht am Seitenrand (oder hat schon Beschnitt)";
-    return method === "mirror" ? BE.applyMirror(frame, fb, t) : BE.applyScale(frame, fb, t.target);
+    if (method === "mirror") return BE.applyMirror(frame, fb, t);
+    if (method === "fill-ca" || method === "fill-gen") {
+        return BE.applyFill(frame, fb, t.target, method === "fill-gen" ? "generative" : "contentAware");
+    }
+    return BE.applyScale(frame, fb, t.target);
 };
 
 // ---------- Ablauf ----------
@@ -436,10 +480,12 @@ BE.itemName = function (item) {
     try { return item.constructor.name + " (ID " + item.id + ")"; } catch (e2) { return "Objekt"; }
 };
 
-BE.process = function (items, method, bleed) {
-    var res = { done: 0, skipped: [] }, seen = {}, i, r, reason;
+BE.process = function (items, method, bleed, onProgress) {
+    var res = { done: 0, skipped: [], created: [] }, seen = {}, i, r, reason;
+    BE.createdFiles = res.created;
     for (i = 0; i < items.length; i++) {
         r = BE.resolveFrame(items[i]);
+        if (onProgress) onProgress(i + 1, items.length, BE.itemName(r.frame || items[i]));
         if (r.frame) {
             if (seen[r.frame.id]) continue;
             seen[r.frame.id] = true;
@@ -462,6 +508,10 @@ BE.formatSummary = function (res) {
         for (i = 0; i < res.skipped.length; i++) {
             s += "\n\u2022 " + res.skipped[i].name + ": " + res.skipped[i].reason;
         }
+    }
+    if (res.created && res.created.length) {
+        s += "\n\n" + res.created.length + (res.created.length === 1 ? " neue PSD-Datei" : " neue PSD-Dateien") +
+            " neben den Originalen angelegt (bleiben beim R\u00fcckg\u00e4ngigmachen erhalten).";
     }
     return s;
 };
