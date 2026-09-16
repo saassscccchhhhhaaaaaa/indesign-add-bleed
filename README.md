@@ -2,9 +2,32 @@
 
 Version 2.0.0 | Autor: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | Lizenz: [MIT](LICENSE) | kostenlos
 
-Ergänzt bei ausgewählten Bildrahmen (Bild, PDF, AI …) Beschnitt an den Kanten,
-die am Seitenrand liegen (Toleranz 1 mm). Der Bund bei Doppelseiten bleibt frei.
-Die Beschnittwerte kommen aus den Dokumenteinstellungen.
+## Worum geht es?
+
+Bilder, die im Layout bis an den Seitenrand reichen („randabfallend“), müssen für den
+Druck ein Stück über den Rand hinaus weiterlaufen – den **Beschnitt**, meist 3 mm.
+Die Druckerei schneidet das Papier nie exakt; fehlt der Beschnitt, entstehen an den
+Kanten weiße Blitzer.
+
+In der Praxis fehlt dieses Stück oft: Das Foto ist zu knapp, der Rahmen endet genau
+an der Seitenkante, oder eine angelieferte PDF-Anzeige hat keinen Beschnitt. Das
+Nacharbeiten von Hand ist mühsam – Rahmen ziehen, Bild skalieren, in Photoshop
+Arbeitsfläche erweitern, füllen, neu platzieren.
+
+**Dieses Script erledigt das auf Knopfdruck:** Rahmen auswählen, Script starten,
+Methode wählen. Es liest den Beschnitt aus den Dokumenteinstellungen, erkennt selbst,
+welche Kanten am Seitenrand liegen (Toleranz 1 mm), lässt bei Doppelseiten den Bund
+aus und ergänzt den fehlenden Rand – für einen oder viele Rahmen gleichzeitig. Es
+funktioniert mit Bildern und mit platzierten PDF- oder AI-Dateien.
+
+### Welche Methode wann?
+
+| Methode | Gut für | Ergebnis |
+|---|---|---|
+| **Skalieren** | Bilder mit etwas Spielraum im Motiv | Bild minimal größer, Ausschnitt verschiebt sich leicht |
+| **Spiegeln** | Flächen, Himmel, Muster, Vektorgrafiken, PDFs | Motiv bleibt unverändert, Rand wird gespiegelt; Vektoren bleiben Vektoren |
+| **Füllen – inhaltsbasiert** | Fotos, bei denen nichts vom Motiv verloren gehen darf | Photoshop ergänzt den Rand passend zum Bild (lokal, kostenlos) |
+| **Füllen – generativ** | schwierige Motive, bei denen inhaltsbasiert nicht reicht | Photoshop-KI erfindet den Rand dazu (experimentell, kostet Credits) |
 
 ## Methoden
 
