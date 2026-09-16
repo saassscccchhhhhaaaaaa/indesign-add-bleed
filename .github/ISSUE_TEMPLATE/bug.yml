@@ -1,0 +1,51 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: method
+    attributes:
+      label: Method
+      options:
+        - Scale
+        - Mirror
+        - Fill – content-aware
+        - Fill – generative
+    validations:
+      required: true
+  - type: textarea
+    id: message
+    attributes:
+      label: Summary / error message from the script
+      description: Text of the dialog shown at the end – a screenshot is fine.
+  - type: input
+    id: indesign
+    attributes:
+      label: InDesign version and UI language
+      placeholder: e.g. InDesign 2026 (21.5), English
+    validations:
+      required: true
+  - type: input
+    id: photoshop
+    attributes:
+      label: Photoshop version (only for "Fill")
+      placeholder: e.g. Photoshop 2026 (27.10)
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: e.g. macOS 26 / Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: Image / frame
+      description: File type (JPG, PSD, PDF, AI …), colour mode, rotated/flipped, single page or spread. Sample files help a lot.

@@ -1,103 +1,101 @@
-# Beschnitt ergänzen (InDesign-Script)
+# Add Bleed (InDesign script)
 
-Version 2.0.0 | Autor: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | Lizenz: [MIT](LICENSE) | kostenlos
+Version 2.0.0 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
 
-## Worum geht es?
+## What is it for?
 
-Bilder, die im Layout bis an den Seitenrand reichen („randabfallend“), müssen für den
-Druck ein Stück über den Rand hinaus weiterlaufen – den **Beschnitt**, meist 3 mm.
-Die Druckerei schneidet das Papier nie exakt; fehlt der Beschnitt, entstehen an den
-Kanten weiße Blitzer.
+Images that run to the edge of the page ("full bleed") have to extend a little beyond
+the trim edge for printing – the **bleed**, usually 3 mm (1/8 in). Printers never cut
+paper exactly; without bleed you get thin white slivers along the edges.
 
-In der Praxis fehlt dieses Stück oft: Das Foto ist zu knapp, der Rahmen endet genau
-an der Seitenkante, oder eine angelieferte PDF-Anzeige hat keinen Beschnitt. Das
-Nacharbeiten von Hand ist mühsam – Rahmen ziehen, Bild skalieren, in Photoshop
-Arbeitsfläche erweitern, füllen, neu platzieren.
+In practice this extra image is often missing: the photo is cropped too tightly, the
+frame ends exactly at the page edge, or a supplied PDF ad has no bleed. Fixing it by
+hand is tedious – drag the frame, scale the image, extend the canvas in Photoshop,
+fill it, place it again.
 
-**Dieses Script erledigt das auf Knopfdruck:** Rahmen auswählen, Script starten,
-Methode wählen. Es liest den Beschnitt aus den Dokumenteinstellungen, erkennt selbst,
-welche Kanten am Seitenrand liegen (Toleranz 1 mm), lässt bei Doppelseiten den Bund
-aus und ergänzt den fehlenden Rand – für einen oder viele Rahmen gleichzeitig. Es
-funktioniert mit Bildern und mit platzierten PDF- oder AI-Dateien.
+**This script does it in one step:** select frames, run the script, pick a method.
+It reads the bleed from the document setup, detects which edges touch the page edge
+(1 mm tolerance), leaves the spine of facing pages alone, and adds the missing
+margin – for one frame or many at once. It works with images as well as placed
+PDF and AI files.
 
-### Welche Methode wann?
+### Which method when?
 
-| Methode | Gut für | Ergebnis |
+| Method | Good for | Result |
 |---|---|---|
-| **Skalieren** | Bilder mit etwas Spielraum im Motiv | Bild minimal größer, Ausschnitt verschiebt sich leicht |
-| **Spiegeln** | Flächen, Himmel, Muster, Vektorgrafiken, PDFs | Motiv bleibt unverändert, Rand wird gespiegelt; Vektoren bleiben Vektoren |
-| **Füllen – inhaltsbasiert** | Fotos, bei denen nichts vom Motiv verloren gehen darf | Photoshop ergänzt den Rand passend zum Bild (lokal, kostenlos) |
-| **Füllen – generativ** | schwierige Motive, bei denen inhaltsbasiert nicht reicht | Photoshop-KI erfindet den Rand dazu (experimentell, kostet Credits) |
+| **Scale** | images with some room around the subject | image slightly larger, crop shifts a little |
+| **Mirror** | flat areas, sky, patterns, vector art, PDFs | artwork untouched, edge is mirrored; vectors stay vectors |
+| **Fill – content-aware** | photos where nothing of the subject may be lost | Photoshop extends the edge to match the image (local, free) |
+| **Fill – generative** | difficult images where content-aware isn't enough | Photoshop AI invents the edge (experimental, uses credits) |
 
-## Methoden
+## Methods in detail
 
-- **Skalieren:** Der Rahmen wird in den Beschnitt erweitert. Reicht das Bild nicht,
-  wird es proportional um die Rahmenmitte so wenig wie nötig vergrößert.
-- **Spiegeln:** Gespiegelte Kopien als Streifen (und Ecken) im Beschnitt,
-  gruppiert mit dem unveränderten Original. Vektoren bleiben Vektoren.
-- **Füllen (Photoshop):** Fehlendes Bild wird in Photoshop ergänzt – *inhaltsbasiert*
-  (lokal, kostenlos) oder *generativ* (**experimentell**: Internet, verbraucht
-  generative Credits, nutzt eine nicht offiziell dokumentierte Photoshop-Funktion,
-  die mit einem Update wegfallen kann). Ergebnis: `Name_beschnitt.psd` mit Ebenen
-  neben dem Original, der Rahmen wird darauf neu verknüpft; die Originaldatei
-  bleibt unverändert. PDF/AI werden dabei mit 300 ppi gerastert. Reicht das Bild
-  schon, wird nur der Rahmen erweitert.
+- **Scale:** The frame is extended into the bleed. If the image doesn't reach far
+  enough, it is enlarged proportionally around the frame centre – only as much as needed.
+- **Mirror:** Mirrored copies are added as strips (and corners) in the bleed and
+  grouped with the unchanged original.
+- **Fill (Photoshop):** The missing image is added in Photoshop – *content-aware*
+  (local, free) or *generative* (**experimental**: needs internet, uses generative
+  credits and relies on an undocumented Photoshop function that may disappear with
+  an update). The result is saved as `Name_beschnitt.psd` with layers next to the
+  original and the frame is relinked to it; the original file is never changed.
+  PDF/AI files are rasterised at 300 ppi. If the image already covers the bleed,
+  only the frame is extended.
 
-Alles lässt sich in InDesign mit einem Schritt rückgängig machen (erzeugte
-PSD-Dateien bleiben auf der Festplatte).
+Everything can be undone in InDesign with a single undo step (created PSD files stay
+on disk).
 
-## Voraussetzungen
+## Requirements
 
-- Adobe InDesign 2026 (entwickelt und getestet unter macOS, deutsche Oberfläche).
-  InDesign 2025 und Windows sollten funktionieren, sind aber noch nicht getestet –
-  Rückmeldungen willkommen.
-- Für „Füllen“: Adobe Photoshop 2026 (getestet mit 27.10).
+- Adobe InDesign 2026 (developed and tested on macOS with the German UI).
+  InDesign 2025 and Windows should work but are not tested yet – feedback welcome.
+- For "Fill": Adobe Photoshop 2026 (tested with 27.10).
 
 ## Installation
 
-1. Unter [Releases](../../releases) die Datei **`Beschnitt_ergaenzen.jsx`** herunterladen.
-2. In InDesign **Fenster > Hilfsprogramme > Skripte** öffnen, Rechtsklick auf
-   **Benutzer** > **Im Finder anzeigen** (Windows: **Im Explorer anzeigen**).
-3. Die Datei in den geöffneten Ordner **Scripts Panel** legen.
-4. Im Skripte-Bedienfeld erscheint sie unter **Benutzer**.
+1. Download **`Beschnitt_ergaenzen.jsx`** from [Releases](../../releases).
+2. In InDesign open **Window > Utilities > Scripts**, right-click **User** >
+   **Reveal in Finder** (Windows: **Reveal in Explorer**).
+3. Put the file into the **Scripts Panel** folder that opens.
+4. It now appears in the Scripts panel under **User**.
 
-Tipp: Unter **Bearbeiten > Tastaturbefehle** (Bereich „Skripte“) lässt sich ein Kürzel vergeben.
+Tip: you can assign a shortcut under **Edit > Keyboard Shortcuts** (area "Scripts").
 
-Für Entwickler auf dem Mac: `./install.sh` verlinkt die Datei aus dem geklonten
-Repository direkt in alle gefundenen Skripte-Ordner.
+For developers on macOS: `./install.sh` symlinks the file from the cloned repository
+into all Scripts Panel folders it finds.
 
-## Benutzung
+## Usage
 
-Einen oder mehrere Bildrahmen auswählen, Script per Doppelklick starten, Methode
-wählen. Am Ende zeigt eine Zusammenfassung, was bearbeitet und was übersprungen wurde.
+Select one or more image frames, double-click the script, choose a method. A summary
+at the end lists what was processed and what was skipped.
 
-**Nicht unterstützt** (wird übersprungen und genannt): gedrehte/verzerrte oder nicht
-rechteckige Rahmen, Rahmen in Gruppen oder verankert, gesperrte Rahmen. Für „Füllen“
-außerdem fehlende/geänderte Verknüpfungen und im Rahmen gedrehte oder gespiegelte Grafiken.
+**Not supported** (skipped and listed): rotated/skewed or non-rectangular frames,
+frames inside groups or anchored, locked frames. For "Fill" also missing or modified
+links and graphics that are rotated or flipped inside their frame.
 
-## Fehler melden und Ideen
+## Bugs and ideas
 
-Bitte über [Issues](../../issues/new/choose) – mit InDesign-/Photoshop-Version,
-Betriebssystem und dem Text der Zusammenfassung. Das Script ist kostenlos und wird
-in der Freizeit gepflegt; Antworten können etwas dauern.
+Please use [Issues](../../issues/new/choose) and include your InDesign/Photoshop
+version, operating system and the text of the summary dialog. The script is free and
+maintained in spare time, so replies may take a while.
 
-## Entwicklung
+## Development
 
 ```bash
 test/run_tests.sh
 ```
 
-Steuert InDesign 2026 per AppleScript (und Photoshop 2026 über BridgeTalk) und
-arbeitet nur mit eigenen, unsichtbaren Testdokumenten. Getestet wird nur das
-inhaltsbasierte Füllen – das generative verbraucht Credits und wird von Hand geprüft.
-Während die Tests auf Photoshop warten, reagiert InDesign nicht.
+Drives InDesign 2026 via AppleScript (and Photoshop 2026 via BridgeTalk) and only
+works with its own hidden test documents. Only content-aware fill is tested
+automatically – generative fill uses credits and is checked by hand. InDesign is
+unresponsive while the tests wait for Photoshop.
 
-Texte mit Umlauten im Code als `\uXXXX` schreiben – ExtendScript liest sie sonst
-falsch (der Test-Runner prüft das). Hintergrund zu Aufbau und Entscheidungen:
+Write non-ASCII characters in string literals as `\uXXXX` – ExtendScript reads them
+incorrectly otherwise (the test runner checks this). Design notes (in German):
 [`docs/superpowers/`](docs/superpowers/).
 
-## Lizenz
+## License
 
-[MIT](LICENSE) © 2026 Sascha Fronczek – Nutzung auf eigene Verantwortung, ohne Gewähr.
-Adobe, InDesign und Photoshop sind Marken von Adobe Inc.; dieses Projekt steht in
-keiner Verbindung zu Adobe.
+[MIT](LICENSE) © 2026 Sascha Fronczek – use at your own risk, no warranty.
+Adobe, InDesign and Photoshop are trademarks of Adobe Inc.; this project is not
+affiliated with Adobe.

@@ -2,7 +2,7 @@
 /*
     Beschnitt_ergaenzen.jsx - Version 2.0.0
     Autor: Sascha Fronczek - https://saschafronczek.de
-    Lizenz: MIT (siehe LICENSE) - Fehler und Ideen: https://github.com/saassscccchhhhhaaaaaa/indesign-beschnitt-ergaenzen/issues
+    License: MIT (see LICENSE) - Bugs and ideas: https://github.com/saassscccchhhhhaaaaaa/indesign-beschnitt-ergaenzen/issues
 
     Ergänzt bei ausgewählten Bildrahmen Beschnitt an den Kanten, die am Seitenrand liegen.
     Methoden: Skalieren, Spiegeln oder Füllen über Photoshop. Bounds immer [oben, links, unten, rechts] in pt.
