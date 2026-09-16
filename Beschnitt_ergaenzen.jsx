@@ -1,11 +1,17 @@
 //@target indesign
 /*
-    Beschnitt_ergaenzen.jsx
+    Beschnitt_ergaenzen.jsx - Version 2.0.0
+    Autor: Sascha Fronczek - https://saschafronczek.de
+
     Ergänzt bei ausgewählten Bildrahmen Beschnitt an den Kanten, die am Seitenrand liegen.
     Methoden: Skalieren, Spiegeln oder Füllen über Photoshop. Bounds immer [oben, links, unten, rechts] in pt.
 */
 
 var BE = {};
+
+BE.VERSION = "2.0.0";
+BE.AUTHOR = "Sascha Fronczek";
+BE.WEBSITE = "saschafronczek.de";
 
 BE.TOLERANZ_PT = 72 / 25.4; // 1 mm
 BE.EPS = 0.01;
@@ -559,6 +565,9 @@ BE.askMethod = function (bleed) {
     pb.alignChildren = "left";
     pb.add("statictext", undefined, "Oben: " + BE.mm(bleed.top) + "    Unten: " + BE.mm(bleed.bottom));
     pb.add("statictext", undefined, "Innen/Links: " + BE.mm(bleed.inside) + "    Au\u00dfen/Rechts: " + BE.mm(bleed.outside));
+    var info = w.add("statictext", undefined, "Version " + BE.VERSION + "  |  " + BE.AUTHOR + "  |  " + BE.WEBSITE);
+    info.alignment = "left";
+    info.enabled = false;
     g = w.add("group");
     g.alignment = "right";
     g.add("button", undefined, "Abbrechen", { name: "cancel" });

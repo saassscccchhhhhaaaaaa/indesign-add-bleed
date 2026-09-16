@@ -1,5 +1,7 @@
 # Beschnitt ergänzen (InDesign-Script)
 
+Version 2.0.0 | Autor: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de)
+
 Ergänzt bei ausgewählten Bildrahmen (Bild, PDF, AI …) Beschnitt an den Kanten,
 die am Seitenrand liegen (Toleranz 1 mm). Der Bund bei Doppelseiten bleibt frei.
 Die Beschnittwerte kommen aus den Dokumenteinstellungen.

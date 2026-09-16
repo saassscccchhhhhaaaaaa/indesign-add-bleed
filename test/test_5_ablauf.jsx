@@ -58,3 +58,8 @@ test("progress: Fenster laesst sich aktualisieren und schliessen", function () {
     p.close();
     check(true, "ohne Fehler");
 });
+
+test("Versionsangaben", function () {
+    check(/^\d+\.\d+\.\d+$/.test(BE.VERSION), "Version " + BE.VERSION);
+    check(BE.AUTHOR === "Sascha Fronczek" && BE.WEBSITE === "saschafronczek.de", "Autor/Website");
+});
