@@ -1,6 +1,6 @@
 //@target indesign
 /*
-    AddBleed.jsx - Version 2.1.0
+    AddBleed.jsx - Version 2.1.1
     Author: Sascha Fronczek - https://saschafronczek.de
     License: MIT (see LICENSE) - Bugs and ideas: https://github.com/saassscccchhhhhaaaaaa/indesign-add-bleed/issues
 
@@ -12,7 +12,7 @@
 
 var BE = {};
 
-BE.VERSION = "2.1.0";
+BE.VERSION = "2.1.1";
 BE.AUTHOR = "Sascha Fronczek";
 BE.WEBSITE = "saschafronczek.de";
 
@@ -521,6 +521,11 @@ BE.applyScale = function (frame, fb, tb) {
     return null;
 };
 
+// True if the item shows a stroke.
+BE.hasStroke = function (item) {
+    return item.strokeWeight > 0 && item.strokeColor.name !== "None";
+};
+
 // Creates mirrored copies as strips/corners and groups them with the original.
 BE.applyMirror = function (frame, fb, t) {
     var pieces = BE.mirrorPieces(fb, t.target, t.edges), items = [frame], i, p, d, flip;
@@ -531,7 +536,8 @@ BE.applyMirror = function (frame, fb, t) {
         flip = p.flipH && p.flipV ? Flip.BOTH : (p.flipH ? Flip.HORIZONTAL : Flip.VERTICAL);
         d.flipItem(flip, [p.axisX, p.axisY]);
         d.geometricBounds = p.rect;
-        d.strokeWeight = 0;
+        // Remove the stroke via its colour: strokeWeight = 0 on a [None] stroke makes InDesign add 1 pt black.
+        d.strokeColor = "None";
         d.textWrapPreferences.textWrapMode = TextWrapModes.NONE;
         items.push(d);
     }

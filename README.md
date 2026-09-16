@@ -1,6 +1,6 @@
 # Add Bleed (InDesign script)
 
-Version 2.1.0 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
+Version 2.1.1 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
 
 ## What is it for?
 

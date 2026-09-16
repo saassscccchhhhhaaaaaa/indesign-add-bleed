@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.1 – 2026-09-16
+- Fix: with **Mirror**, the mirrored strips got a 1 pt black stroke when the
+  original frame had no stroke colour. They now never get a stroke.
+
 ## 2.1.0 – 2026-09-16
 - Script renamed from `Beschnitt_ergaenzen.jsx` to **`AddBleed.jsx`**.
   If you installed the old file, delete it from your Scripts Panel folder.

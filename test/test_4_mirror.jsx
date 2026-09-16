@@ -14,7 +14,7 @@ test("mirror: top + left, group with strips and corner", function () {
     check(top !== null, "top strip exists");
     if (top) {
         near(top.allGraphics[0].geometricBounds, [-110, -20, 10, 120], "top graphic mirrored");
-        check(top.strokeWeight === 0, "no stroke");
+        check(!BE.hasStroke(top), "no stroke");
     }
     var left = pieceAt(grp, [0, -9, 100, 0]);
     check(left !== null, "left strip exists");
@@ -58,9 +58,24 @@ test("mirror: stroke and text wrap only on the original", function () {
     var strip = pieceAt(grp, [-9, 50, 0, 150]);
     check(strip !== null, "top strip");
     if (strip) {
-        check(strip.strokeWeight === 0, "stroke removed");
+        check(!BE.hasStroke(strip), "stroke removed");
         check(strip.textWrapPreferences.textWrapMode == TextWrapModes.NONE, "no text wrap");
     }
     var orig = pieceAt(grp, [0, 50, 100, 150]);
-    check(orig !== null && orig.strokeWeight === 4, "original keeps its stroke");
+    check(orig !== null && orig.strokeWeight === 4 && BE.hasStroke(orig), "original keeps its stroke");
+});
+
+// Regression: setting strokeWeight = 0 on a frame whose stroke colour is [None]
+// makes InDesign apply a 1 pt black stroke.
+test("mirror: frame without stroke colour gets no stroke on the strips", function () {
+    var doc = FIX.doc({ facing: false });
+    var f = FIX.frame(doc.pages[0], [0, 0, 100, 100]);
+    f.strokeColor = doc.swatches.itemByName("None");
+    check(f.strokeColor.name === "None", "precondition: stroke colour None");
+    check(BE.processFrame(f, "mirror", B9) === null, "result");
+    var items = doc.groups[0].pageItems.everyItem().getElements(), i, bad = [];
+    for (i = 0; i < items.length; i++) {
+        if (BE.hasStroke(items[i])) bad.push(items[i].strokeWeight + " pt " + items[i].strokeColor.name);
+    }
+    check(bad.length === 0, "pieces with stroke: " + bad.join(", "));
 });
