@@ -45,11 +45,9 @@ InDesign neu verknüpft.
 Parameter (JSON-artiges Objekt als Quelltext): `src`, `dst`, `need{top,left,bottom,right}`,
 `mode` ("contentAware"|"generative"), `pdfPage`, `pdfCrop`.
 1. Einstellungen sichern (Dialoge aus, Lineal Pixel), in `finally` zurück.
-2. Öffnen: Bilddatei normal; PDF/AI mit `PDFOpenOptions` (300 ppi, RGB bei RGB-Quelle
-   egal – Standardmodus, Seite `pdfPage`, `cropPage` passend zu `pdfCrop`, antiAlias).
-3. `flatten()`; Hintergrund in normale Ebene „Original“ umwandeln ist nicht nötig –
-   Hintergrund bleibt, heißt aber „Original“ nur, wenn umbenennbar (Hintergrund kann
-   nicht umbenannt werden → Hintergrund in Ebene umwandeln und „Original“ nennen).
+2. Öffnen: Bilddatei normal; PDF/AI mit `PDFOpenOptions` (300 ppi, Farbmodus Standard,
+   Seite `pdfPage`, `cropPage` passend zu `pdfCrop`, Kantenglättung an).
+3. `flatten()`, Hintergrund in normale Ebene umwandeln und „Original“ nennen.
 4. Pixel zu ergänzen je Seite: `ceil(anteil × Breite bzw. Höhe)`; Arbeitsfläche erweitern
    (erst links/oben mit Anker unten rechts, dann rechts/unten mit Anker oben links).
 5. Überlappung `ov = min(40, max(8, round(0.01 × min(Breite, Höhe))))`.
