@@ -211,6 +211,101 @@ BE.processFrame = function (frame, method, bleed) {
     return method === "mirror" ? BE.applyMirror(frame, fb, t) : BE.applyScale(frame, fb, t.target);
 };
 
+// ---------- Ablauf ----------
+
+BE.itemName = function (item) {
+    try {
+        if (item.allGraphics.length && item.allGraphics[0].itemLink) return item.allGraphics[0].itemLink.name;
+    } catch (e) {}
+    try { return item.constructor.name + " (ID " + item.id + ")"; } catch (e2) { return "Objekt"; }
+};
+
+BE.process = function (items, method, bleed) {
+    var res = { done: 0, skipped: [] }, seen = {}, i, r, reason;
+    for (i = 0; i < items.length; i++) {
+        r = BE.resolveFrame(items[i]);
+        if (r.frame) {
+            if (seen[r.frame.id]) continue;
+            seen[r.frame.id] = true;
+        }
+        reason = r.reason;
+        if (!reason) {
+            try { reason = BE.processFrame(r.frame, method, bleed); }
+            catch (e) { reason = "Fehler: " + e.message; }
+        }
+        if (reason) res.skipped.push({ name: BE.itemName(r.frame || items[i]), reason: reason });
+        else res.done++;
+    }
+    return res;
+};
+
+BE.formatSummary = function (res) {
+    var s = res.done + " Rahmen bearbeitet.", i;
+    if (res.skipped.length) {
+        s += "\n\n" + res.skipped.length + " \u00fcbersprungen:";
+        for (i = 0; i < res.skipped.length; i++) {
+            s += "\n\u2022 " + res.skipped[i].name + ": " + res.skipped[i].reason;
+        }
+    }
+    return s;
+};
+
+BE.runUndoable = function (fn) {
+    app.doScript(fn, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT, "Beschnitt erg\u00e4nzen");
+};
+
+BE.mm = function (pt) {
+    return (Math.round(pt * 25.4 / 72 * 100) / 100) + " mm";
+};
+
+BE.askMethod = function (bleed) {
+    var w = new Window("dialog", "Beschnitt erg\u00e4nzen"), pm, pb, g, rScale, rMirror;
+    w.alignChildren = "fill";
+    pm = w.add("panel", undefined, "Methode");
+    pm.alignChildren = "left";
+    rScale = pm.add("radiobutton", undefined, "Skalieren");
+    rMirror = pm.add("radiobutton", undefined, "Spiegeln");
+    rScale.value = true;
+    pb = w.add("panel", undefined, "Beschnitt des Dokuments");
+    pb.alignChildren = "left";
+    pb.add("statictext", undefined, "Oben: " + BE.mm(bleed.top) + "    Unten: " + BE.mm(bleed.bottom));
+    pb.add("statictext", undefined, "Innen/Links: " + BE.mm(bleed.inside) + "    Au\u00dfen/Rechts: " + BE.mm(bleed.outside));
+    g = w.add("group");
+    g.alignment = "right";
+    g.add("button", undefined, "Abbrechen", { name: "cancel" });
+    g.add("button", undefined, "OK", { name: "ok" });
+    if (w.show() !== 1) return null;
+    return rMirror.value ? "mirror" : "scale";
+};
+
+BE.run = function () {
+    var doc, sel, items = [], i, bleed, method, res, unit;
+    if (!app.documents.length) { alert("Es ist kein Dokument ge\u00f6ffnet."); return; }
+    doc = app.activeDocument;
+    sel = app.selection;
+    if (!sel.length) { alert("Bitte zuerst einen oder mehrere Bildrahmen ausw\u00e4hlen."); return; }
+    for (i = 0; i < sel.length; i++) items.push(sel[i]);
+
+    unit = app.scriptPreferences.measurementUnit;
+    try {
+        app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+        bleed = BE.readBleed(doc);
+    } finally {
+        app.scriptPreferences.measurementUnit = unit;
+    }
+    if (!bleed.top && !bleed.bottom && !bleed.inside && !bleed.outside) {
+        alert("Im Dokument ist kein Beschnitt eingestellt.\n(Datei > Dokument einrichten)");
+        return;
+    }
+    method = BE.askMethod(bleed);
+    if (!method) return;
+
+    BE.runUndoable(function () {
+        res = BE.withSettings(doc, function () { return BE.process(items, method, bleed); });
+    });
+    alert(BE.formatSummary(res), "Beschnitt erg\u00e4nzen");
+};
+
 // ---------- Start ----------
 
 if (!$.global.BE_TEST) {
