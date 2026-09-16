@@ -184,6 +184,24 @@ BE.applyScale = function (frame, fb, tb) {
     return null;
 };
 
+// Gespiegelte Kopien als Streifen/Ecken anlegen und mit dem Original gruppieren.
+BE.applyMirror = function (frame, fb, t) {
+    var pieces = BE.mirrorPieces(fb, t.target, t.edges), items = [frame], i, p, d, flip;
+    for (i = 0; i < pieces.length; i++) {
+        p = pieces[i];
+        d = frame.duplicate();
+        d.frameFittingOptions.autoFit = false;
+        flip = p.flipH && p.flipV ? Flip.BOTH : (p.flipH ? Flip.HORIZONTAL : Flip.VERTICAL);
+        d.flipItem(flip, [p.axisX, p.axisY]);
+        d.geometricBounds = p.rect;
+        d.strokeWeight = 0;
+        d.textWrapPreferences.textWrapMode = TextWrapModes.NONE;
+        items.push(d);
+    }
+    frame.parent.groups.add(items);
+    return null;
+};
+
 // Bearbeitet einen geprüften Rahmen. Rückgabe: null oder Grund fürs Überspringen.
 BE.processFrame = function (frame, method, bleed) {
     var info = BE.pageInfo(frame), fb = frame.geometricBounds;
