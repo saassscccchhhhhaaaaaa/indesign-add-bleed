@@ -2,7 +2,7 @@
 /*
     Beschnitt_ergaenzen.jsx
     Ergänzt bei ausgewählten Bildrahmen Beschnitt an den Kanten, die am Seitenrand liegen.
-    Methoden: Skalieren oder Spiegeln. Bounds immer [oben, links, unten, rechts] in pt.
+    Methoden: Skalieren, Spiegeln oder Füllen über Photoshop. Bounds immer [oben, links, unten, rechts] in pt.
 */
 
 var BE = {};
@@ -524,14 +524,37 @@ BE.mm = function (pt) {
     return (Math.round(pt * 25.4 / 72 * 100) / 100) + " mm";
 };
 
+// Fensterfabrik (im Test austauschbar)
+BE.newWindow = function (type, title) {
+    return new Window(type, title);
+};
+
 BE.askMethod = function (bleed) {
-    var w = new Window("dialog", "Beschnitt erg\u00e4nzen"), pm, pb, g, rScale, rMirror;
+    var w = BE.newWindow("dialog", "Beschnitt erg\u00e4nzen"), pm, pb, pf, g, rScale, rMirror, rFill, rCa, rGen, note, genNote;
     w.alignChildren = "fill";
     pm = w.add("panel", undefined, "Methode");
     pm.alignChildren = "left";
     rScale = pm.add("radiobutton", undefined, "Skalieren");
     rMirror = pm.add("radiobutton", undefined, "Spiegeln");
+    rFill = pm.add("radiobutton", undefined, "F\u00fcllen (Photoshop)");
+    pf = pm.add("group");
+    pf.orientation = "column";
+    pf.alignChildren = "left";
+    pf.margins = [20, 0, 0, 0];
+    rCa = pf.add("radiobutton", undefined, "inhaltsbasiert");
+    rGen = pf.add("radiobutton", undefined, "generativ");
+    note = pf.add("statictext", undefined, "PDF/AI werden in Pixel umgewandelt (300 ppi).\nNeue PSD-Dateien entstehen neben den Originalen.", { multiline: true });
+    note.preferredSize = [340, 34];
+    genNote = pf.add("statictext", undefined, "Generativ braucht Internet, verbraucht generative Credits\nund nutzt eine nicht offiziell dokumentierte Photoshop-Funktion.", { multiline: true });
+    genNote.preferredSize = [340, 34];
     rScale.value = true;
+    rCa.value = true;
+    function sync() {
+        pf.enabled = rFill.value;
+        genNote.visible = rFill.value && rGen.value;
+    }
+    rScale.onClick = rMirror.onClick = rFill.onClick = rCa.onClick = rGen.onClick = sync;
+    sync();
     pb = w.add("panel", undefined, "Beschnitt des Dokuments");
     pb.alignChildren = "left";
     pb.add("statictext", undefined, "Oben: " + BE.mm(bleed.top) + "    Unten: " + BE.mm(bleed.bottom));
@@ -541,11 +564,32 @@ BE.askMethod = function (bleed) {
     g.add("button", undefined, "Abbrechen", { name: "cancel" });
     g.add("button", undefined, "OK", { name: "ok" });
     if (w.show() !== 1) return null;
-    return rMirror.value ? "mirror" : "scale";
+    if (rMirror.value) return "mirror";
+    if (rFill.value) return rGen.value ? "fill-gen" : "fill-ca";
+    return "scale";
+};
+
+// Fortschrittsfenster; liefert {update(i, n, name), close()}
+BE.progress = function (total) {
+    var w = new Window("palette", "Beschnitt erg\u00e4nzen"), bar, label;
+    w.alignChildren = "fill";
+    label = w.add("statictext", undefined, "");
+    label.preferredSize.width = 360;
+    bar = w.add("progressbar", undefined, 0, total);
+    bar.preferredSize.width = 360;
+    w.show();
+    return {
+        update: function (i, n, name) {
+            label.text = "Rahmen " + i + " von " + n + " \u2013 " + name;
+            bar.value = i - 1;
+            w.update();
+        },
+        close: function () { w.close(); }
+    };
 };
 
 BE.run = function () {
-    var doc, sel, items = [], i, bleed, method, res, unit;
+    var doc, sel, items = [], i, bleed, method, res, unit, isFill, prog = null;
     if (!app.documents.length) { alert("Es ist kein Dokument ge\u00f6ffnet."); return; }
     doc = app.activeDocument;
     sel = app.selection;
@@ -566,9 +610,21 @@ BE.run = function () {
     method = BE.askMethod(bleed);
     if (!method) return;
 
-    BE.runUndoable(function () {
-        res = BE.withSettings(doc, function () { return BE.process(items, method, bleed); });
-    });
+    isFill = method === "fill-ca" || method === "fill-gen";
+    if (isFill && !BE.psSpecifier()) {
+        alert("Photoshop wurde nicht gefunden.");
+        return;
+    }
+    if (isFill) prog = BE.progress(items.length);
+    try {
+        BE.runUndoable(function () {
+            res = BE.withSettings(doc, function () {
+                return BE.process(items, method, bleed, prog ? prog.update : null);
+            });
+        });
+    } finally {
+        if (prog) prog.close();
+    }
     alert(BE.formatSummary(res), "Beschnitt erg\u00e4nzen");
 };
 

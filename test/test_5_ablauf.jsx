@@ -38,3 +38,23 @@ test("runUndoable: ein Rueckgaengig-Schritt", function () {
     check(doc.groups.length === 0, "nach einem Undo keine Gruppe");
     check(doc.rectangles.length === 1, "nur Original: " + doc.rectangles.length);
 });
+
+test("askMethod: Dialog baut sich fehlerfrei auf und schliesst", function () {
+    var orig = BE.newWindow, res;
+    BE.newWindow = function (type, title) {
+        var w = orig(type, title);
+        if (type === "dialog") w.onShow = function () { w.close(1); };
+        return w;
+    };
+    try { res = BE.askMethod(B9); } finally { BE.newWindow = orig; }
+    // close() aus onShow liefert in InDesign nicht den OK-Code, daher nur Aufbau pruefen
+    check(res === null || res === "scale", "Ergebnis " + res);
+});
+
+test("progress: Fenster laesst sich aktualisieren und schliessen", function () {
+    var p = BE.progress(3);
+    p.update(1, 3, "a.jpg");
+    p.update(3, 3, "c.jpg");
+    p.close();
+    check(true, "ohne Fehler");
+});
