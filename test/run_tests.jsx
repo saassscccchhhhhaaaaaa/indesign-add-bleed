@@ -1,8 +1,9 @@
 //@target indesign
-// Test-Runner: wird von test/run_tests.sh per AppleScript in InDesign gestartet.
+// Test runner: started in InDesign by test/run_tests.sh via AppleScript.
 $.global.BE_TEST = true;
 var TEST_DIR = File($.fileName).parent;
-$.evalFile(File(TEST_DIR.parent.fsName + "/Beschnitt_ergaenzen.jsx"));
+$.evalFile(File(TEST_DIR.parent.fsName + "/AddBleed.jsx"));
+BE.lang = "en";
 
 var T = { lines: [], ok: 0, fail: 0, current: "" };
 var B9 = { top: 9, bottom: 9, inside: 9, outside: 9 };
@@ -22,7 +23,7 @@ function near(a, b, msg, tol) {
     } else {
         same = Math.abs(a - b) <= tol;
     }
-    check(same, msg + " - erwartet " + b + ", erhalten " + a);
+    check(same, msg + " - expected " + b + ", got " + a);
 }
 
 function test(name, fn) {
@@ -30,12 +31,12 @@ function test(name, fn) {
     T.current = name;
     try { fn(); } catch (e) {
         T.fail++;
-        T.lines.push("FAIL " + name + ": Exception " + e + " (Zeile " + e.line + ")");
+        T.lines.push("FAIL " + name + ": exception " + e + " (line " + e.line + ")");
     }
     T.lines.push((T.fail === before ? "ok   " : "---  ") + name);
 }
 
-// Objekt einer Gruppe mit bestimmten Rahmen-Bounds finden
+// Finds the item of a group with the given frame bounds
 function pieceAt(grp, bounds) {
     var items = grp.pageItems.everyItem().getElements(), i, k, b, same;
     for (i = 0; i < items.length; i++) {
@@ -47,8 +48,7 @@ function pieceAt(grp, bounds) {
     return null;
 }
 
-// Quelltext in Photoshop ausfuehren (fuer Tests)
-// Photoshop-Dialoge sind dabei ausgeschaltet, damit nichts blockiert.
+// Runs code in Photoshop (for tests) with Photoshop dialogs switched off, so nothing blocks.
 function psRun(code) {
     return BE.callPhotoshop("(function(){var dd=app.displayDialogs;app.displayDialogs=DialogModes.NO;" +
         "try{return eval(String(" + code.toSource() + "));}finally{app.displayDialogs=dd;}})()", 60000);
@@ -59,6 +59,7 @@ FIX.out = Folder(TEST_DIR.fsName + "/output");
 FIX.png = File(FIX.out.fsName + "/fixture.png");
 FIX.pdf = File(FIX.out.fsName + "/fixture.pdf");
 
+// Creates a 100 x 100 pt cyan square as PNG (72 ppi) and PDF.
 FIX.makeSources = function () {
     var src = app.documents.add(false), r;
     src.documentPreferences.facingPages = false;
@@ -73,7 +74,7 @@ FIX.makeSources = function () {
     src.close(SaveOptions.NO);
 };
 
-// opts: { facing, pages, bleed:{top,bottom,inside,outside}, visible }
+// Hidden test document, 200 x 300 pt pages. opts: { facing, pages, bleed:{top,bottom,inside,outside}, visible }
 FIX.doc = function (opts) {
     var doc = app.documents.add(opts.visible === true), dp = doc.documentPreferences;
     var b = opts.bleed || B9;
@@ -92,7 +93,7 @@ FIX.doc = function (opts) {
     return doc;
 };
 
-// Rahmen mit platzierter Datei; gb = Grafik-Bounds (Standard: wie Rahmen)
+// Frame with a placed file; gb = graphic bounds (default: same as the frame)
 FIX.frame = function (page, fb, file, gb) {
     var f = page.rectangles.add({ geometricBounds: fb, strokeWeight: 0 });
     var g = f.place(file || FIX.png)[0];
@@ -110,7 +111,7 @@ try {
     app.scriptPreferences.userInteractionLevel = UserInteractionLevels.NEVER_INTERACT;
     app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
     FIX.out.create();
-    var old = FIX.out.getFiles(function (f) { return /_beschnitt(-\d+)?\.psd$|^tmp_/.test(f.name); });
+    var old = FIX.out.getFiles(function (f) { return /_bleed(-\d+)?\.psd$|^tmp_/.test(f.name); });
     for (var o = 0; o < old.length; o++) old[o].remove();
     FIX.makeSources();
     var testFiles = TEST_DIR.getFiles("test_*.jsx");
@@ -121,7 +122,7 @@ try {
     }
 } catch (e) {
     T.fail++;
-    T.lines.push("FAIL Runner: " + e + " (Zeile " + e.line + ")");
+    T.lines.push("FAIL runner: " + e + " (line " + e.line + ")");
 } finally {
     for (var d = FIX.docs.length - 1; d >= 0; d--) {
         try { if (FIX.docs[d].isValid) FIX.docs[d].close(SaveOptions.NO); } catch (e2) {}
@@ -134,6 +135,6 @@ try {
     rf.encoding = "UTF-8";
     rf.lineFeed = "Unix";
     rf.open("w");
-    rf.write(T.lines.join("\n") + "\nERGEBNIS: " + T.ok + " ok, " + T.fail + " fehlgeschlagen\n");
+    rf.write(T.lines.join("\n") + "\nRESULT: " + T.ok + " ok, " + T.fail + " failed\n");
     rf.close();
 }

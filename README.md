@@ -1,6 +1,6 @@
 # Add Bleed (InDesign script)
 
-Version 2.0.0 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
+Version 2.1.0 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
 
 ## What is it for?
 
@@ -37,7 +37,7 @@ PDF and AI files.
 - **Fill (Photoshop):** The missing image is added in Photoshop – *content-aware*
   (local, free) or *generative* (**experimental**: needs internet, uses generative
   credits and relies on an undocumented Photoshop function that may disappear with
-  an update). The result is saved as `Name_beschnitt.psd` with layers next to the
+  an update). The result is saved as `Name_bleed.psd` with layers next to the
   original and the frame is relinked to it; the original file is never changed.
   PDF/AI files are rasterised at 300 ppi. If the image already covers the bleed,
   only the frame is extended.
@@ -53,7 +53,7 @@ on disk).
 
 ## Installation
 
-1. Download **`Beschnitt_ergaenzen.jsx`** from [Releases](../../releases).
+1. Download **`AddBleed.jsx`** from [Releases](../../releases).
 2. In InDesign open **Window > Utilities > Scripts**, right-click **User** >
    **Reveal in Finder** (Windows: **Reveal in Explorer**).
 3. Put the file into the **Scripts Panel** folder that opens.
@@ -68,6 +68,8 @@ into all Scripts Panel folders it finds.
 
 Select one or more image frames, double-click the script, choose a method. A summary
 at the end lists what was processed and what was skipped.
+
+The dialogs are in German when InDesign runs in German, and in English otherwise.
 
 **Not supported** (skipped and listed): rotated/skewed or non-rectangular frames,
 frames inside groups or anchored, locked frames. For "Fill" also missing or modified
@@ -92,7 +94,7 @@ unresponsive while the tests wait for Photoshop.
 
 Write non-ASCII characters in string literals as `\uXXXX` – ExtendScript reads them
 incorrectly otherwise (the test runner checks this). Design notes (in German):
-[`docs/superpowers/`](docs/superpowers/).
+[`docs/superpowers/`](docs/superpowers/README.md).
 
 ## License
 

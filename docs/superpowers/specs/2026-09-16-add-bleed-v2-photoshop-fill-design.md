@@ -1,6 +1,6 @@
 # Beschnitt_ergaenzen.jsx – Version 2: Füllen über Photoshop
 
-Baut auf Version 1 auf (`2026-09-16-beschnitt-ergaenzen-design.md`). Alles aus v1 gilt weiter.
+Baut auf Version 1 auf (`2026-09-16-add-bleed-design.md`). Alles aus v1 gilt weiter.
 
 ## Ziel
 Dritte Methode **„Füllen (Photoshop)“**: fehlendes Bild im Beschnitt wird in Photoshop

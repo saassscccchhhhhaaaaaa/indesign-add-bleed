@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Methode „Füllen (Photoshop)“ (inhaltsbasiert/generativ) in `Beschnitt_ergaenzen.jsx` (Spec: `docs/superpowers/specs/2026-09-16-beschnitt-v2-photoshop-fuellen-design.md`).
+**Goal:** Methode „Füllen (Photoshop)“ (inhaltsbasiert/generativ) in `Beschnitt_ergaenzen.jsx` (Spec: `docs/superpowers/specs/2026-09-16-add-bleed-v2-photoshop-fill-design.md`).
 
 **Architecture:** Neue reine Funktionen (Bedarf, Dateiname, Ergebnis-Parser, Grafik-Bounds, Überlappung/Innenrechteck), ein Photoshop-Job `BE.psJob` der per `Function.toString()` zusammen mit seinen Helfern als BridgeTalk-Quelltext gesendet wird, synchroner BridgeTalk-Aufruf, `BE.applyFill` in InDesign, Dialog-/Ablauf-Erweiterung.
 
