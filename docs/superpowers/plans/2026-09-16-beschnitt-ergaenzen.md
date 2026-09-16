@@ -1,0 +1,990 @@
+# Beschnitt_ergaenzen.jsx Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** InDesign-Script, das bei ausgewählten Bildrahmen Beschnitt per Skalieren oder Spiegeln ergänzt (Spec: `docs/superpowers/specs/2026-09-16-beschnitt-ergaenzen-design.md`).
+
+**Architecture:** Eine ExtendScript-Datei `Beschnitt_ergaenzen.jsx` mit Namespace `BE`: reine Geometriefunktionen (ohne DOM), DOM-Helfer, zwei Methoden, Ablauf/Dialog. `BE.run()` wird nur ausgeführt, wenn `$.global.BE_TEST` nicht gesetzt ist. Tests laufen in InDesign 2026, gestartet per AppleScript; der Runner lädt das Script und alle `test/test_*.jsx`, arbeitet nur mit eigenen, unsichtbaren Dokumenten und schreibt `test/output/result.txt`.
+
+**Tech Stack:** ExtendScript (ES3) für InDesign 2025/2026, ScriptUI, AppleScript (`osascript`), bash.
+
+## Global Constraints
+
+- Eine Script-Datei, ExtendScript/ES3 (kein `let`, keine Arrow-Functions, kein `Array.prototype.forEach`).
+- Nicht-ASCII-Zeichen in Strings als `\uXXXX` schreiben (Dateikodierung wird von ExtendScript nicht zuverlässig erkannt).
+- Toleranz Kantenerkennung: 1 mm = `72 / 25.4` pt.
+- Intern Punkt + Linealursprung Druckbogen; Einstellungen immer in `finally` wiederherstellen.
+- Ganzer Lauf = ein Undo-Schritt (`UndoModes.ENTIRE_SCRIPT`), Name „Beschnitt ergänzen“.
+- Tests dürfen offene Nutzerdokumente nie verändern; Farben nie über lokalisierte Farbfeldnamen holen.
+- Test-App: `Adobe InDesign 2026`.
+
+## Dateien
+
+- `Beschnitt_ergaenzen.jsx` – das Script
+- `test/run_tests.sh` – startet den Runner in InDesign, gibt Ergebnis aus, Exit-Code 1 bei Fehlern
+- `test/run_tests.jsx` – Runner, Assertions, Fixtures
+- `test/test_1_geometrie.jsx`, `test_2_dokument.jsx`, `test_3_skalieren.jsx`, `test_4_spiegeln.jsx`, `test_5_ablauf.jsx`
+- `install.sh` – Symlink in alle gefundenen Scripts-Panel-Ordner
+- `README.md`
+
+---
+
+### Task 1: Test-Infrastruktur + reine Geometrie
+
+**Files:**
+- Create: `test/run_tests.sh`, `test/run_tests.jsx`, `test/test_1_geometrie.jsx`, `Beschnitt_ergaenzen.jsx`
+
+**Interfaces:**
+- Produces (Bounds immer `[oben, links, unten, rechts]` in pt):
+  - `BE.TOLERANZ_PT`, `BE.EPS`
+  - `BE.computeTarget(fb, page, spreadLeft, spreadRight, leftSide, rightSide, bleed, tol)` → `{edges:{top,left,bottom,right}, target:[4], any:bool}`; `leftSide/rightSide` ∈ `"inside"|"outside"`; `bleed = {top,bottom,inside,outside}`
+  - `BE.covers(gb, tb)` → bool
+  - `BE.scaleFactor(fb, gb, tb)` → Zahl ≥ 1 oder `null`
+  - `BE.scaleBounds(b, cy, cx, s)` → Bounds
+  - `BE.mirrorPieces(fb, tb, edges)` → `[{flipH, flipV, axisX, axisY, rect}]`, Reihenfolge: oben, unten, links, rechts, Ecke o-l, o-r, u-l, u-r
+  - Runner-Globals: `test(name, fn)`, `check(cond, msg)`, `near(a, b, msg, tol)`, `B9`, `pieceAt(grp, bounds)`, `FIX.doc(opts)`, `FIX.frame(page, fb, file, gb)`, `FIX.png`, `FIX.pdf`
+
+- [ ] **Step 1: Runner schreiben** – `test/run_tests.sh`:
+
+```bash
+#!/bin/bash
+# Startet die Tests in InDesign und gibt das Ergebnis aus.
+DIR="$(cd "$(dirname "$0")" && pwd)"
+mkdir -p "$DIR/output"
+rm -f "$DIR/output/result.txt"
+osascript -e 'with timeout of 600 seconds' \
+  -e "tell application \"Adobe InDesign 2026\" to do script (POSIX file \"$DIR/run_tests.jsx\") language javascript" \
+  -e 'end timeout' >/dev/null || exit 1
+[ -f "$DIR/output/result.txt" ] || { echo "Keine Ergebnisdatei"; exit 1; }
+cat "$DIR/output/result.txt"
+grep -q "ERGEBNIS: [0-9]* ok, 0 fehlgeschlagen" "$DIR/output/result.txt"
+```
+
+`test/run_tests.jsx`:
+
+```js
+//@target indesign
+// Test-Runner: wird von test/run_tests.sh per AppleScript in InDesign gestartet.
+$.global.BE_TEST = true;
+var TEST_DIR = File($.fileName).parent;
+$.evalFile(File(TEST_DIR.parent.fsName + "/Beschnitt_ergaenzen.jsx"));
+
+var T = { lines: [], ok: 0, fail: 0, current: "" };
+var B9 = { top: 9, bottom: 9, inside: 9, outside: 9 };
+
+function check(cond, msg) {
+    if (cond) { T.ok++; return; }
+    T.fail++;
+    T.lines.push("FAIL " + T.current + ": " + msg);
+}
+
+function near(a, b, msg, tol) {
+    var i, same = true;
+    tol = tol || 0.01;
+    if (a instanceof Array) {
+        if (a.length !== b.length) same = false;
+        else for (i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > tol) same = false;
+    } else {
+        same = Math.abs(a - b) <= tol;
+    }
+    check(same, msg + " - erwartet " + b + ", erhalten " + a);
+}
+
+function test(name, fn) {
+    var before = T.fail;
+    T.current = name;
+    try { fn(); } catch (e) {
+        T.fail++;
+        T.lines.push("FAIL " + name + ": Exception " + e + " (Zeile " + e.line + ")");
+    }
+    T.lines.push((T.fail === before ? "ok   " : "---  ") + name);
+}
+
+// Objekt einer Gruppe mit bestimmten Rahmen-Bounds finden
+function pieceAt(grp, bounds) {
+    var items = grp.pageItems.everyItem().getElements(), i, k, b, same;
+    for (i = 0; i < items.length; i++) {
+        b = items[i].geometricBounds;
+        same = true;
+        for (k = 0; k < 4; k++) if (Math.abs(b[k] - bounds[k]) > 0.01) same = false;
+        if (same) return items[i];
+    }
+    return null;
+}
+
+var FIX = { docs: [] };
+FIX.out = Folder(TEST_DIR.fsName + "/output");
+FIX.png = File(FIX.out.fsName + "/fixture.png");
+FIX.pdf = File(FIX.out.fsName + "/fixture.pdf");
+
+FIX.makeSources = function () {
+    var src = app.documents.add(false), r;
+    src.documentPreferences.facingPages = false;
+    src.documentPreferences.pageWidth = 100;
+    src.documentPreferences.pageHeight = 100;
+    r = src.pages[0].rectangles.add({ geometricBounds: [0, 0, 100, 100], strokeWeight: 0 });
+    r.fillColor = src.colors.add({ model: ColorModel.PROCESS, space: ColorSpace.CMYK, colorValue: [100, 0, 0, 0] });
+    app.pngExportPreferences.exportResolution = 72;
+    app.pngExportPreferences.pngExportRange = PNGExportRangeEnum.EXPORT_ALL;
+    src.exportFile(ExportFormat.PNG_FORMAT, FIX.png);
+    src.exportFile(ExportFormat.PDF_TYPE, FIX.pdf);
+    src.close(SaveOptions.NO);
+};
+
+// opts: { facing, pages, bleed:{top,bottom,inside,outside}, visible }
+FIX.doc = function (opts) {
+    var doc = app.documents.add(opts.visible === true), dp = doc.documentPreferences;
+    var b = opts.bleed || B9;
+    FIX.docs.push(doc);
+    dp.facingPages = opts.facing;
+    dp.pagesPerDocument = opts.pages || 1;
+    dp.pageWidth = 200;
+    dp.pageHeight = 300;
+    dp.documentBleedUniformSize = false;
+    dp.documentBleedTopOffset = b.top;
+    dp.documentBleedBottomOffset = b.bottom;
+    dp.documentBleedInsideOrLeftOffset = b.inside;
+    dp.documentBleedOutsideOrRightOffset = b.outside;
+    doc.viewPreferences.rulerOrigin = RulerOrigin.SPREAD_ORIGIN;
+    doc.zeroPoint = [0, 0];
+    return doc;
+};
+
+// Rahmen mit platzierter Datei; gb = Grafik-Bounds (Standard: wie Rahmen)
+FIX.frame = function (page, fb, file, gb) {
+    var f = page.rectangles.add({ geometricBounds: fb, strokeWeight: 0 });
+    var g = f.place(file || FIX.png)[0];
+    g.geometricBounds = gb || fb;
+    return f;
+};
+
+var saved = {
+    uil: app.scriptPreferences.userInteractionLevel,
+    unit: app.scriptPreferences.measurementUnit,
+    pngRes: app.pngExportPreferences.exportResolution,
+    pngRange: app.pngExportPreferences.pngExportRange
+};
+try {
+    app.scriptPreferences.userInteractionLevel = UserInteractionLevels.NEVER_INTERACT;
+    app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+    FIX.out.create();
+    FIX.makeSources();
+    var testFiles = TEST_DIR.getFiles("test_*.jsx");
+    testFiles.sort(function (x, y) { return x.name < y.name ? -1 : 1; });
+    for (var tf = 0; tf < testFiles.length; tf++) {
+        T.lines.push("# " + testFiles[tf].name);
+        $.evalFile(testFiles[tf]);
+    }
+} catch (e) {
+    T.fail++;
+    T.lines.push("FAIL Runner: " + e + " (Zeile " + e.line + ")");
+} finally {
+    for (var d = FIX.docs.length - 1; d >= 0; d--) {
+        try { if (FIX.docs[d].isValid) FIX.docs[d].close(SaveOptions.NO); } catch (e2) {}
+    }
+    app.pngExportPreferences.exportResolution = saved.pngRes;
+    app.pngExportPreferences.pngExportRange = saved.pngRange;
+    app.scriptPreferences.measurementUnit = saved.unit;
+    app.scriptPreferences.userInteractionLevel = saved.uil;
+    var rf = File(FIX.out.fsName + "/result.txt");
+    rf.encoding = "UTF-8";
+    rf.open("w");
+    rf.write(T.lines.join("\n") + "\nERGEBNIS: " + T.ok + " ok, " + T.fail + " fehlgeschlagen\n");
+    rf.close();
+}
+```
+
+- [ ] **Step 2: Geometrie-Tests schreiben** – `test/test_1_geometrie.jsx`:
+
+```js
+// Reine Geometrie, ohne Dokument
+var PAGE = [0, 0, 300, 200];
+
+test("computeTarget: Rahmen oben links an der Seite", function () {
+    var t = BE.computeTarget([0, 0, 100, 100], PAGE, 0, 200, "inside", "outside", B9, BE.TOLERANZ_PT);
+    check(t.any, "any");
+    check(t.edges.top && t.edges.left && !t.edges.bottom && !t.edges.right, "Kanten oben+links");
+    near(t.target, [-9, -9, 100, 100], "Ziel");
+});
+
+test("computeTarget: Toleranz 1 mm, Ziel an Seitenkante ausgerichtet", function () {
+    var t = BE.computeTarget([2, 1, 298, 199], PAGE, 0, 200, "inside", "outside", B9, BE.TOLERANZ_PT);
+    check(t.edges.top && t.edges.left && t.edges.bottom && t.edges.right, "alle Kanten");
+    near(t.target, [-9, -9, 309, 209], "Ziel");
+});
+
+test("computeTarget: ausserhalb der Toleranz", function () {
+    var t = BE.computeTarget([3, 10, 100, 100], PAGE, 0, 200, "inside", "outside", B9, BE.TOLERANZ_PT);
+    check(!t.any, "keine Kante");
+    near(t.target, [3, 10, 100, 100], "Ziel unveraendert");
+});
+
+test("computeTarget: innen/aussen je Seite, Beschnitt 0 zaehlt nicht", function () {
+    var b = { top: 0, bottom: 5, inside: 3, outside: 7 };
+    var t = BE.computeTarget([0, 0, 300, 200], PAGE, 0, 200, "outside", "inside", b, BE.TOLERANZ_PT);
+    check(!t.edges.top, "oben ohne Beschnitt");
+    near(t.target, [0, -7, 305, 203], "Ziel");
+});
+
+test("computeTarget: Druckbogen-Kanten statt Seitenkanten", function () {
+    var t = BE.computeTarget([0, 0, 300, 200], PAGE, 0, 400, "outside", "inside", B9, BE.TOLERANZ_PT);
+    check(t.edges.left && !t.edges.right, "nur links, nicht am Bund");
+});
+
+test("covers", function () {
+    check(BE.covers([-10, -10, 110, 110], [-9, -9, 100, 100]), "deckt ab");
+    check(!BE.covers([0, -10, 110, 110], [-9, -9, 100, 100]), "oben zu kurz");
+});
+
+test("scaleFactor", function () {
+    near(BE.scaleFactor([0, 0, 100, 100], [0, 0, 100, 100], [-9, -9, 100, 100]), 59 / 50, "Faktor");
+    near(BE.scaleFactor([0, 0, 100, 100], [-20, -20, 120, 120], [-9, -9, 100, 100]), 1, "gross genug -> 1");
+    check(BE.scaleFactor([0, 0, 100, 100], [60, 0, 100, 100], [-9, 0, 100, 100]) === null, "Grafik unter Mitte -> null");
+});
+
+test("scaleBounds", function () {
+    near(BE.scaleBounds([0, 0, 100, 100], 50, 50, 1.18), [-9, -9, 109, 109], "skaliert um Mitte");
+});
+
+test("mirrorPieces: oben + links ergibt 3 Teile", function () {
+    var p = BE.mirrorPieces([0, 0, 100, 100], [-9, -9, 100, 100], { top: true, left: true, bottom: false, right: false });
+    check(p.length === 3, "Anzahl " + p.length);
+    check(!p[0].flipH && p[0].flipV, "oben vertikal");
+    near(p[0].axisY, 0, "Achse oben");
+    near(p[0].rect, [-9, 0, 0, 100], "Streifen oben");
+    check(p[1].flipH && !p[1].flipV, "links horizontal");
+    near(p[1].axisX, 0, "Achse links");
+    near(p[1].rect, [0, -9, 100, 0], "Streifen links");
+    check(p[2].flipH && p[2].flipV, "Ecke beidseitig");
+    near(p[2].rect, [-9, -9, 0, 0], "Ecke");
+});
+
+test("mirrorPieces: alle Kanten ergibt 8 Teile", function () {
+    var p = BE.mirrorPieces([0, 0, 100, 100], [-9, -9, 109, 109], { top: true, left: true, bottom: true, right: true });
+    check(p.length === 8, "Anzahl " + p.length);
+    near(p[1].axisY, 100, "Achse unten");
+    near(p[3].axisX, 100, "Achse rechts");
+    near(p[7].rect, [100, 100, 109, 109], "Ecke unten rechts");
+    near([p[7].axisX, p[7].axisY], [100, 100], "Achsen unten rechts");
+});
+```
+
+- [ ] **Step 3: Tests laufen lassen, Fehlschlag prüfen**
+
+Run: `chmod +x test/run_tests.sh && test/run_tests.sh`
+Expected: Exit 1 („Keine Ergebnisdatei“ oder FAIL, weil `Beschnitt_ergaenzen.jsx` fehlt).
+
+- [ ] **Step 4: Script-Grundgerüst + Geometrie** – `Beschnitt_ergaenzen.jsx`:
+
+```js
+//@target indesign
+/*
+    Beschnitt_ergaenzen.jsx
+    Ergänzt bei ausgewählten Bildrahmen Beschnitt an den Kanten, die am Seitenrand liegen.
+    Methoden: Skalieren oder Spiegeln. Bounds immer [oben, links, unten, rechts] in pt.
+*/
+
+var BE = {};
+
+BE.TOLERANZ_PT = 72 / 25.4; // 1 mm
+BE.EPS = 0.01;
+
+// ---------- Geometrie (ohne InDesign-Objekte) ----------
+
+// Erkennt die Kanten am Seiten-/Druckbogenrand und berechnet die Zielgrenzen.
+BE.computeTarget = function (fb, page, spreadLeft, spreadRight, leftSide, rightSide, bleed, tol) {
+    var b = {
+        top: bleed.top,
+        bottom: bleed.bottom,
+        left: leftSide === "outside" ? bleed.outside : bleed.inside,
+        right: rightSide === "outside" ? bleed.outside : bleed.inside
+    };
+    var edges = {
+        top: b.top > 0 && Math.abs(fb[0] - page[0]) <= tol,
+        left: b.left > 0 && Math.abs(fb[1] - spreadLeft) <= tol,
+        bottom: b.bottom > 0 && Math.abs(fb[2] - page[2]) <= tol,
+        right: b.right > 0 && Math.abs(fb[3] - spreadRight) <= tol
+    };
+    return {
+        edges: edges,
+        target: [
+            edges.top ? page[0] - b.top : fb[0],
+            edges.left ? spreadLeft - b.left : fb[1],
+            edges.bottom ? page[2] + b.bottom : fb[2],
+            edges.right ? spreadRight + b.right : fb[3]
+        ],
+        any: edges.top || edges.left || edges.bottom || edges.right
+    };
+};
+
+BE.covers = function (gb, tb) {
+    return gb[0] <= tb[0] + BE.EPS && gb[1] <= tb[1] + BE.EPS &&
+        gb[2] >= tb[2] - BE.EPS && gb[3] >= tb[3] - BE.EPS;
+};
+
+// Kleinster Faktor >= 1, mit dem die um die Rahmenmitte skalierte Grafik das Ziel abdeckt.
+// null, wenn die Grafik die Rahmenmitte nicht umschließt.
+BE.scaleFactor = function (fb, gb, tb) {
+    var cy = (fb[0] + fb[2]) / 2, cx = (fb[1] + fb[3]) / 2;
+    var c = [cy, cx, cy, cx], s = 1, i, d;
+    for (i = 0; i < 4; i++) {
+        d = gb[i] - c[i];
+        if (i < 2 ? d >= 0 : d <= 0) return null;
+        s = Math.max(s, (tb[i] - c[i]) / d);
+    }
+    return s;
+};
+
+BE.scaleBounds = function (b, cy, cx, s) {
+    return [cy + (b[0] - cy) * s, cx + (b[1] - cx) * s, cy + (b[2] - cy) * s, cx + (b[3] - cx) * s];
+};
+
+// Streifen und Ecken für die Spiegelung, jeweils mit Spiegelachse und Zielrechteck.
+BE.mirrorPieces = function (fb, tb, e) {
+    var p = [];
+    function add(h, v, ax, ay, rect) {
+        p.push({ flipH: h, flipV: v, axisX: ax, axisY: ay, rect: rect });
+    }
+    if (e.top) add(false, true, fb[1], fb[0], [tb[0], fb[1], fb[0], fb[3]]);
+    if (e.bottom) add(false, true, fb[1], fb[2], [fb[2], fb[1], tb[2], fb[3]]);
+    if (e.left) add(true, false, fb[1], fb[0], [fb[0], tb[1], fb[2], fb[1]]);
+    if (e.right) add(true, false, fb[3], fb[0], [fb[0], fb[3], fb[2], tb[3]]);
+    if (e.top && e.left) add(true, true, fb[1], fb[0], [tb[0], tb[1], fb[0], fb[1]]);
+    if (e.top && e.right) add(true, true, fb[3], fb[0], [tb[0], fb[3], fb[0], tb[3]]);
+    if (e.bottom && e.left) add(true, true, fb[1], fb[2], [fb[2], tb[1], tb[2], fb[1]]);
+    if (e.bottom && e.right) add(true, true, fb[3], fb[2], [fb[2], fb[3], tb[2], tb[3]]);
+    return p;
+};
+
+// ---------- Start ----------
+
+if (!$.global.BE_TEST) {
+    BE.run();
+}
+```
+
+- [ ] **Step 5: Tests laufen lassen** – Run: `test/run_tests.sh` – Expected: `ERGEBNIS: … 0 fehlgeschlagen`, Exit 0.
+
+- [ ] **Step 6: Commit** – `git add -A && git commit -m "Geometrie und Test-Infrastruktur"`
+
+---
+
+### Task 2: Dokument-Helfer (Beschnitt, Einstellungen, Seiten, Rahmenprüfung)
+
+**Files:**
+- Modify: `Beschnitt_ergaenzen.jsx` (neuer Abschnitt vor „Start“)
+- Create: `test/test_2_dokument.jsx`
+
+**Interfaces:**
+- Produces:
+  - `BE.readBleed(doc)` → `{top,bottom,inside,outside}` (in aktueller Script-Einheit)
+  - `BE.withSettings(doc, fn)` → Rückgabe von `fn`; setzt Punkt/Druckbogen-Ursprung/Nullpunkt 0, stellt in `finally` zurück
+  - `BE.pageInfo(frame)` → `{page:[4], spreadLeft, spreadRight, leftSide, rightSide}`
+  - `BE.isRectangular(frame)` → bool
+  - `BE.resolveFrame(item)` → `{frame: PageItem|undefined, reason: String|null}`; Gründe exakt: `"kein Bildrahmen"`, `"Rahmen enthält keine Grafik"`, `"liegt in einer Gruppe oder ist verankert"`, `"gesperrt"`, `"liegt auf der Montagefläche"`, `"gedreht oder verzerrt"`, `"keine Rechteckform"`
+
+- [ ] **Step 1: Tests schreiben** – `test/test_2_dokument.jsx`:
+
+```js
+// Dokument-Helfer
+test("withSettings: Punkt intern, Einstellungen wiederhergestellt", function () {
+    var doc = FIX.doc({ facing: false });
+    var sp = app.scriptPreferences, inside;
+    sp.measurementUnit = MeasurementUnits.MILLIMETERS;
+    try {
+        doc.documentPreferences.documentBleedTopOffset = 3;
+        doc.viewPreferences.rulerOrigin = RulerOrigin.PAGE_ORIGIN;
+        doc.zeroPoint = [10, 20];
+        inside = BE.withSettings(doc, function () {
+            return { bleed: BE.readBleed(doc), origin: doc.viewPreferences.rulerOrigin, zero: doc.zeroPoint };
+        });
+        near(inside.bleed.top, 3 * 72 / 25.4, "Beschnitt in pt");
+        check(inside.origin == RulerOrigin.SPREAD_ORIGIN, "Ursprung Druckbogen");
+        near(inside.zero, [0, 0], "Nullpunkt");
+        check(sp.measurementUnit == MeasurementUnits.MILLIMETERS, "Einheit zurueck");
+        check(doc.viewPreferences.rulerOrigin == RulerOrigin.PAGE_ORIGIN, "Ursprung zurueck");
+        near(doc.zeroPoint, [10, 20], "Nullpunkt zurueck");
+    } finally {
+        sp.measurementUnit = MeasurementUnits.POINTS;
+    }
+});
+
+test("withSettings: stellt auch nach Fehler wieder her", function () {
+    var doc = FIX.doc({ facing: false }), thrown = false;
+    doc.viewPreferences.rulerOrigin = RulerOrigin.PAGE_ORIGIN;
+    try { BE.withSettings(doc, function () { throw new Error("x"); }); } catch (e) { thrown = true; }
+    check(thrown, "Fehler weitergereicht");
+    check(doc.viewPreferences.rulerOrigin == RulerOrigin.PAGE_ORIGIN, "Ursprung zurueck");
+    check(app.scriptPreferences.measurementUnit == MeasurementUnits.POINTS, "Einheit zurueck");
+});
+
+test("pageInfo: Einzelseite", function () {
+    var doc = FIX.doc({ facing: false });
+    var info = BE.pageInfo(FIX.frame(doc.pages[0], [0, 0, 100, 100]));
+    near(info.page, [0, 0, 300, 200], "Seite");
+    near([info.spreadLeft, info.spreadRight], [0, 200], "Bogen");
+    check(info.leftSide === "inside" && info.rightSide === "outside", "Seiten " + info.leftSide + "/" + info.rightSide);
+});
+
+test("pageInfo: Doppelseite", function () {
+    var doc = FIX.doc({ facing: true, pages: 3 });
+    var left = doc.spreads[1].pages[0], right = doc.spreads[1].pages[1];
+    var info = BE.pageInfo(FIX.frame(left, [0, left.bounds[1], 100, left.bounds[1] + 100]));
+    near([info.spreadLeft, info.spreadRight], [left.bounds[1], right.bounds[3]], "Bogen");
+    check(info.leftSide === "outside" && info.rightSide === "outside", "Seiten " + info.leftSide + "/" + info.rightSide);
+    var single = BE.pageInfo(FIX.frame(doc.pages[0], [0, 0, 100, 100]));
+    check(single.leftSide === "inside" && single.rightSide === "outside", "rechte Einzelseite");
+});
+
+test("resolveFrame: gueltige Rahmen", function () {
+    var doc = FIX.doc({ facing: false });
+    var img = FIX.frame(doc.pages[0], [0, 0, 100, 100]);
+    var pdf = FIX.frame(doc.pages[0], [0, 100, 100, 200], FIX.pdf);
+    var r = BE.resolveFrame(img);
+    check(r.frame.id === img.id && r.reason === null, "Bild: " + r.reason);
+    r = BE.resolveFrame(pdf);
+    check(r.reason === null, "PDF: " + r.reason);
+    r = BE.resolveFrame(img.allGraphics[0]);
+    check(r.frame.id === img.id && r.reason === null, "Grafik -> Rahmen: " + r.reason);
+});
+
+test("resolveFrame: ungueltige Objekte", function () {
+    var doc = FIX.doc({ facing: false }), pg = doc.pages[0];
+    function reason(item) { return BE.resolveFrame(item).reason; }
+    check(reason(pg.textFrames.add({ geometricBounds: [0, 0, 50, 50] })) === "kein Bildrahmen", "Textrahmen");
+    check(reason(pg.rectangles.add({ geometricBounds: [0, 0, 50, 50] })) === "Rahmen enthält keine Grafik", "leer");
+    var oval = pg.ovals.add({ geometricBounds: [0, 0, 50, 50] });
+    oval.place(FIX.png);
+    check(reason(oval) === "keine Rechteckform", "Oval");
+    var rot = FIX.frame(pg, [0, 0, 50, 50]);
+    rot.rotationAngle = 10;
+    check(reason(rot) === "gedreht oder verzerrt", "gedreht");
+    var locked = FIX.frame(pg, [0, 0, 50, 50]);
+    locked.locked = true;
+    check(reason(locked) === "gesperrt", "gesperrt");
+    var a = FIX.frame(pg, [0, 0, 50, 50]), b = FIX.frame(pg, [60, 0, 90, 50]);
+    pg.parent.groups.add([a, b]);
+    check(reason(doc.groups[0].rectangles[0]) === "liegt in einer Gruppe oder ist verankert", "in Gruppe");
+    var off = FIX.frame(pg, [0, -300, 50, -250]);
+    check(reason(off) === "liegt auf der Montagefläche", "Montageflaeche");
+});
+```
+
+- [ ] **Step 2: Tests laufen lassen** – `test/run_tests.sh` – Expected: FAIL (`BE.readBleed` usw. undefiniert).
+
+- [ ] **Step 3: Implementieren** – in `Beschnitt_ergaenzen.jsx` vor `// ---------- Start ----------` einfügen:
+
+```js
+// ---------- Dokument-Helfer ----------
+
+BE.GRAPHIC_TYPES = { Image: 1, PDF: 1, EPS: 1, ImportedPage: 1, PICT: 1, WMF: 1, Graphic: 1 };
+BE.FRAME_TYPES = { Rectangle: 1, Polygon: 1, Oval: 1 };
+
+BE.readBleed = function (doc) {
+    var dp = doc.documentPreferences;
+    return {
+        top: dp.documentBleedTopOffset,
+        bottom: dp.documentBleedBottomOffset,
+        inside: dp.documentBleedInsideOrLeftOffset,
+        outside: dp.documentBleedOutsideOrRightOffset
+    };
+};
+
+// Führt fn mit Einheit Punkt, Linealursprung Druckbogen und Nullpunkt 0 aus.
+BE.withSettings = function (doc, fn) {
+    var sp = app.scriptPreferences, vp = doc.viewPreferences;
+    var saved = { unit: sp.measurementUnit, origin: vp.rulerOrigin, zero: doc.zeroPoint };
+    try {
+        sp.measurementUnit = MeasurementUnits.POINTS;
+        vp.rulerOrigin = RulerOrigin.SPREAD_ORIGIN;
+        doc.zeroPoint = [0, 0];
+        return fn();
+    } finally {
+        sp.measurementUnit = saved.unit;
+        vp.rulerOrigin = saved.origin;
+        doc.zeroPoint = saved.zero;
+    }
+};
+
+// Seite des Rahmens, Außenkanten des Druckbogens und Innen/Außen je Seite.
+BE.pageInfo = function (frame) {
+    var page = frame.parentPage, pages = page.parent.pages;
+    var leftPage = pages[0], rightPage = pages[0], i;
+    for (i = 1; i < pages.length; i++) {
+        if (pages[i].bounds[1] < leftPage.bounds[1]) leftPage = pages[i];
+        if (pages[i].bounds[3] > rightPage.bounds[3]) rightPage = pages[i];
+    }
+    return {
+        page: page.bounds,
+        spreadLeft: leftPage.bounds[1],
+        spreadRight: rightPage.bounds[3],
+        leftSide: leftPage.side == PageSideOptions.LEFT_HAND ? "outside" : "inside",
+        rightSide: rightPage.side == PageSideOptions.LEFT_HAND ? "inside" : "outside"
+    };
+};
+
+BE.samePoint = function (a, b) {
+    return Math.abs(a[0] - b[0]) < BE.EPS && Math.abs(a[1] - b[1]) < BE.EPS;
+};
+
+BE.isRectangular = function (frame) {
+    var pts, gb = frame.geometricBounds, i, a;
+    if (frame.paths.length !== 1) return false;
+    pts = frame.paths[0].pathPoints;
+    if (pts.length !== 4) return false;
+    for (i = 0; i < 4; i++) {
+        a = pts[i].anchor;
+        if (!BE.samePoint(a, pts[i].leftDirection) || !BE.samePoint(a, pts[i].rightDirection)) return false;
+        if (Math.abs(a[0] - gb[1]) >= BE.EPS && Math.abs(a[0] - gb[3]) >= BE.EPS) return false;
+        if (Math.abs(a[1] - gb[0]) >= BE.EPS && Math.abs(a[1] - gb[2]) >= BE.EPS) return false;
+    }
+    return true;
+};
+
+// Liefert den zu bearbeitenden Rahmen oder den Grund, warum er übersprungen wird.
+BE.resolveFrame = function (item) {
+    var pc;
+    if (BE.GRAPHIC_TYPES[item.constructor.name]) item = item.parent;
+    if (!BE.FRAME_TYPES[item.constructor.name]) return { reason: "kein Bildrahmen" };
+    if (item.allGraphics.length !== 1) return { frame: item, reason: "Rahmen enthält keine Grafik" };
+    pc = item.parent.constructor.name;
+    if (pc !== "Spread" && pc !== "MasterSpread") return { frame: item, reason: "liegt in einer Gruppe oder ist verankert" };
+    if (item.locked || item.itemLayer.locked) return { frame: item, reason: "gesperrt" };
+    if (!item.parentPage) return { frame: item, reason: "liegt auf der Montagefläche" };
+    if (Math.abs(item.rotationAngle) > BE.EPS || Math.abs(item.shearAngle) > BE.EPS) {
+        return { frame: item, reason: "gedreht oder verzerrt" };
+    }
+    if (!BE.isRectangular(item)) return { frame: item, reason: "keine Rechteckform" };
+    return { frame: item, reason: null };
+};
+```
+
+- [ ] **Step 4: Tests laufen lassen** – `test/run_tests.sh` – Expected: 0 fehlgeschlagen.
+- [ ] **Step 5: Commit** – `git add -A && git commit -m "Dokument-Helfer und Rahmenpruefung"`
+
+---
+
+### Task 3: Methode Skalieren + processFrame
+
+**Files:**
+- Modify: `Beschnitt_ergaenzen.jsx`
+- Create: `test/test_3_skalieren.jsx`
+
+**Interfaces:**
+- Consumes: `BE.pageInfo`, `BE.computeTarget`, `BE.covers`, `BE.scaleFactor`, `BE.scaleBounds`
+- Produces:
+  - `BE.setFrameBounds(frame, b)` – Rahmen setzen, Inhalt bleibt (autoFit temporär aus)
+  - `BE.applyScale(frame, fb, tb)` → `null` oder Grund
+  - `BE.processFrame(frame, method, bleed)` → `null` oder Grund; `method` ∈ `"scale"|"mirror"`; Grund bei keiner Kante exakt `"liegt nicht am Seitenrand (oder hat schon Beschnitt)"`
+  - `BE.applyMirror` wird in Task 4 ergänzt (hier nur aufgerufen)
+
+- [ ] **Step 1: Tests schreiben** – `test/test_3_skalieren.jsx`:
+
+```js
+// Methode Skalieren
+test("Skalieren: genug Ueberstand -> nur Rahmen erweitern", function () {
+    var doc = FIX.doc({ facing: false });
+    var f = FIX.frame(doc.pages[0], [0, 0, 100, 100], FIX.png, [-20, -20, 120, 120]);
+    var r = BE.processFrame(f, "scale", B9);
+    check(r === null, "Ergebnis " + r);
+    near(f.geometricBounds, [-9, -9, 100, 100], "Rahmen");
+    near(f.allGraphics[0].geometricBounds, [-20, -20, 120, 120], "Grafik unveraendert");
+});
+
+test("Skalieren: Bild zu klein -> proportional um Rahmenmitte", function () {
+    var doc = FIX.doc({ facing: false });
+    var f = FIX.frame(doc.pages[0], [0, 0, 100, 100]);
+    var g = f.allGraphics[0], hs = g.absoluteHorizontalScale, vs = g.absoluteVerticalScale;
+    check(BE.processFrame(f, "scale", B9) === null, "Ergebnis");
+    near(f.geometricBounds, [-9, -9, 100, 100], "Rahmen");
+    near(f.allGraphics[0].geometricBounds, [-9, -9, 109, 109], "Grafik");
+    near(f.allGraphics[0].absoluteHorizontalScale / hs, 1.18, "Faktor horizontal");
+    near(f.allGraphics[0].absoluteVerticalScale / vs, 1.18, "Faktor vertikal");
+});
+
+test("Skalieren: rechte Seite einer Doppelseite, Bund bleibt", function () {
+    var doc = FIX.doc({ facing: true, pages: 3, bleed: { top: 9, bottom: 6, inside: 3, outside: 12 } });
+    var right = doc.spreads[1].pages[1], pb = right.bounds;
+    var f = FIX.frame(right, pb, FIX.png, [pb[0] - 50, pb[1] - 50, pb[2] + 50, pb[3] + 50]);
+    check(BE.processFrame(f, "scale", BE.readBleed(doc)) === null, "Ergebnis");
+    near(f.geometricBounds, [pb[0] - 9, pb[1], pb[2] + 6, pb[3] + 12], "oben/unten/aussen, nicht Bund");
+});
+
+test("Skalieren: Rahmen nicht am Rand", function () {
+    var doc = FIX.doc({ facing: false });
+    var f = FIX.frame(doc.pages[0], [50, 50, 100, 100]);
+    check(BE.processFrame(f, "scale", B9) === "liegt nicht am Seitenrand (oder hat schon Beschnitt)", "Grund");
+    near(f.geometricBounds, [50, 50, 100, 100], "unveraendert");
+});
+
+test("Skalieren: PDF", function () {
+    var doc = FIX.doc({ facing: false });
+    var f = FIX.frame(doc.pages[0], [200, 100, 300, 200], FIX.pdf);
+    check(BE.processFrame(f, "scale", B9) === null, "Ergebnis");
+    near(f.geometricBounds, [200, 100, 309, 209], "Rahmen");
+    check(BE.covers(f.allGraphics[0].geometricBounds, [200, 100, 309, 209]), "PDF deckt ab");
+});
+```
+
+- [ ] **Step 2: Tests laufen lassen** – Expected: FAIL (`BE.processFrame` undefiniert).
+
+- [ ] **Step 3: Implementieren** – vor „Start“ einfügen:
+
+```js
+// ---------- Methoden ----------
+
+// Rahmen auf neue Grenzen setzen, ohne dass der Inhalt mitgeht.
+BE.setFrameBounds = function (frame, b) {
+    var fo = frame.frameFittingOptions, auto = fo.autoFit;
+    fo.autoFit = false;
+    frame.geometricBounds = b;
+    fo.autoFit = auto;
+};
+
+BE.applyScale = function (frame, fb, tb) {
+    var g = frame.allGraphics[0], gb = g.geometricBounds, s;
+    if (!BE.covers(gb, tb)) {
+        if (Math.abs(g.rotationAngle) > BE.EPS || Math.abs(g.shearAngle) > BE.EPS) {
+            return "Grafik im Rahmen gedreht oder verzerrt";
+        }
+        s = BE.scaleFactor(fb, gb, tb);
+        if (s === null) return "Grafik deckt die Rahmenmitte nicht ab";
+        g.geometricBounds = BE.scaleBounds(gb, (fb[0] + fb[2]) / 2, (fb[1] + fb[3]) / 2, s);
+    }
+    BE.setFrameBounds(frame, tb);
+    return null;
+};
+
+// Bearbeitet einen geprüften Rahmen. Rückgabe: null oder Grund fürs Überspringen.
+BE.processFrame = function (frame, method, bleed) {
+    var info = BE.pageInfo(frame), fb = frame.geometricBounds;
+    var t = BE.computeTarget(fb, info.page, info.spreadLeft, info.spreadRight,
+        info.leftSide, info.rightSide, bleed, BE.TOLERANZ_PT);
+    if (!t.any) return "liegt nicht am Seitenrand (oder hat schon Beschnitt)";
+    return method === "mirror" ? BE.applyMirror(frame, fb, t) : BE.applyScale(frame, fb, t.target);
+};
+```
+
+- [ ] **Step 4: Tests laufen lassen** – Expected: 0 fehlgeschlagen.
+- [ ] **Step 5: Commit** – `git add -A && git commit -m "Methode Skalieren"`
+
+---
+
+### Task 4: Methode Spiegeln
+
+**Files:**
+- Modify: `Beschnitt_ergaenzen.jsx`
+- Create: `test/test_4_spiegeln.jsx`
+
+**Interfaces:**
+- Consumes: `BE.mirrorPieces`, `t = {edges, target}` aus `BE.computeTarget`
+- Produces: `BE.applyMirror(frame, fb, t)` → `null`; legt Gruppe aus Original + Teilen an
+
+- [ ] **Step 1: Tests schreiben** – `test/test_4_spiegeln.jsx`:
+
+```js
+// Methode Spiegeln
+test("Spiegeln: oben + links, Gruppe mit Streifen und Ecke", function () {
+    var doc = FIX.doc({ facing: false });
+    var f = FIX.frame(doc.pages[0], [0, 0, 100, 100], FIX.png, [-10, -20, 110, 120]);
+    var fid = f.id;
+    check(BE.processFrame(f, "mirror", B9) === null, "Ergebnis");
+    check(doc.groups.length === 1, "eine Gruppe");
+    var grp = doc.groups[0];
+    check(grp.pageItems.length === 4, "4 Objekte: " + grp.pageItems.length);
+    var orig = grp.pageItems.itemByID(fid);
+    near(orig.geometricBounds, [0, 0, 100, 100], "Original unveraendert");
+    near(orig.allGraphics[0].geometricBounds, [-10, -20, 110, 120], "Original-Grafik unveraendert");
+    var top = pieceAt(grp, [-9, 0, 0, 100]);
+    check(top !== null, "Streifen oben vorhanden");
+    if (top) {
+        near(top.allGraphics[0].geometricBounds, [-110, -20, 10, 120], "Grafik oben gespiegelt");
+        check(top.strokeWeight === 0, "keine Kontur");
+    }
+    var left = pieceAt(grp, [0, -9, 100, 0]);
+    check(left !== null, "Streifen links vorhanden");
+    if (left) near(left.allGraphics[0].geometricBounds, [-10, -120, 110, 20], "Grafik links gespiegelt");
+    var corner = pieceAt(grp, [-9, -9, 0, 0]);
+    check(corner !== null, "Ecke vorhanden");
+    if (corner) near(corner.allGraphics[0].geometricBounds, [-110, -120, 10, 20], "Grafik Ecke gespiegelt");
+});
+
+test("Spiegeln: rechte Kante einer Doppelseite, Bund ohne Streifen", function () {
+    var doc = FIX.doc({ facing: true, pages: 3, bleed: { top: 0, bottom: 0, inside: 3, outside: 12 } });
+    var right = doc.spreads[1].pages[1], pb = right.bounds;
+    var f = FIX.frame(right, [100, pb[1], 200, pb[3]]);
+    check(BE.processFrame(f, "mirror", BE.readBleed(doc)) === null, "Ergebnis");
+    var grp = doc.groups[0];
+    check(grp.pageItems.length === 2, "Original + 1 Streifen: " + grp.pageItems.length);
+    var strip = pieceAt(grp, [100, pb[3], 200, pb[3] + 12]);
+    check(strip !== null, "Streifen rechts");
+    if (strip) near(strip.allGraphics[0].geometricBounds, [100, pb[3], 200, pb[3] + 200], "Grafik gespiegelt");
+});
+
+test("Spiegeln: PDF unten rechts", function () {
+    var doc = FIX.doc({ facing: false });
+    var f = FIX.frame(doc.pages[0], [200, 100, 300, 200], FIX.pdf);
+    check(BE.processFrame(f, "mirror", B9) === null, "Ergebnis");
+    var grp = doc.groups[0];
+    check(grp.pageItems.length === 4, "Original + 2 Streifen + Ecke: " + grp.pageItems.length);
+    check(pieceAt(grp, [300, 200, 309, 209]) !== null, "Ecke unten rechts");
+    var items = grp.pageItems.everyItem().getElements(), pdfs = 0, i;
+    for (i = 0; i < items.length; i++) if (items[i].allGraphics[0].constructor.name === "PDF") pdfs++;
+    check(pdfs === 4, "alle Teile enthalten die PDF: " + pdfs);
+});
+
+test("Spiegeln: Kontur und Textumfluss nur am Original", function () {
+    var doc = FIX.doc({ facing: false });
+    var f = FIX.frame(doc.pages[0], [0, 50, 100, 150]);
+    f.strokeWeight = 4;
+    f.textWrapPreferences.textWrapMode = TextWrapModes.BOUNDING_BOX_TEXT_WRAP;
+    check(BE.processFrame(f, "mirror", B9) === null, "Ergebnis");
+    var grp = doc.groups[0];
+    var strip = pieceAt(grp, [-9, 50, 0, 150]);
+    check(strip !== null, "Streifen oben");
+    if (strip) {
+        check(strip.strokeWeight === 0, "Kontur entfernt");
+        check(strip.textWrapPreferences.textWrapMode == TextWrapModes.NONE, "kein Textumfluss");
+    }
+    var orig = pieceAt(grp, [0, 50, 100, 150]);
+    check(orig !== null && orig.strokeWeight === 4, "Original behaelt Kontur");
+});
+```
+
+- [ ] **Step 2: Tests laufen lassen** – Expected: FAIL (`BE.applyMirror` undefiniert).
+
+- [ ] **Step 3: Implementieren** – nach `BE.applyScale` einfügen:
+
+```js
+// Gespiegelte Kopien als Streifen/Ecken anlegen und mit dem Original gruppieren.
+BE.applyMirror = function (frame, fb, t) {
+    var pieces = BE.mirrorPieces(fb, t.target, t.edges), items = [frame], i, p, d, flip;
+    for (i = 0; i < pieces.length; i++) {
+        p = pieces[i];
+        d = frame.duplicate();
+        d.frameFittingOptions.autoFit = false;
+        flip = p.flipH && p.flipV ? Flip.BOTH : (p.flipH ? Flip.HORIZONTAL : Flip.VERTICAL);
+        d.flipItem(flip, [p.axisX, p.axisY]);
+        d.geometricBounds = p.rect;
+        d.strokeWeight = 0;
+        d.textWrapPreferences.textWrapMode = TextWrapModes.NONE;
+        items.push(d);
+    }
+    frame.parent.groups.add(items);
+    return null;
+};
+```
+
+- [ ] **Step 4: Tests laufen lassen** – Expected: 0 fehlgeschlagen.
+- [ ] **Step 5: Commit** – `git add -A && git commit -m "Methode Spiegeln"`
+
+---
+
+### Task 5: Ablauf, Dialog, Undo, Installation, README
+
+**Files:**
+- Modify: `Beschnitt_ergaenzen.jsx`
+- Create: `test/test_5_ablauf.jsx`, `install.sh`, `README.md`
+
+**Interfaces:**
+- Consumes: `BE.resolveFrame`, `BE.processFrame`, `BE.withSettings`, `BE.readBleed`
+- Produces: `BE.itemName(item)`, `BE.process(items, method, bleed)` → `{done, skipped:[{name, reason}]}`, `BE.formatSummary(res)`, `BE.runUndoable(fn)`, `BE.askMethod(bleed)` → `"scale"|"mirror"|null`, `BE.run()`
+
+- [ ] **Step 1: Tests schreiben** – `test/test_5_ablauf.jsx`:
+
+```js
+// Ablauf
+test("process: gemischte Auswahl mit Zusammenfassung", function () {
+    var doc = FIX.doc({ facing: false }), pg = doc.pages[0];
+    var a = FIX.frame(pg, [0, 0, 100, 100]);
+    var inner = FIX.frame(pg, [120, 50, 150, 100]);
+    var txt = pg.textFrames.add({ geometricBounds: [200, 0, 250, 50] });
+    var res = BE.process([a, a.allGraphics[0], inner, txt], "scale", B9);
+    check(res.done === 1, "1 bearbeitet: " + res.done);
+    check(res.skipped.length === 2, "2 uebersprungen: " + res.skipped.length);
+    var s = BE.formatSummary(res);
+    check(s.indexOf("1 Rahmen bearbeitet.") === 0, s);
+    check(s.indexOf("fixture.png: liegt nicht am Seitenrand") > 0, s);
+    check(s.indexOf("kein Bildrahmen") > 0, s);
+});
+
+test("process: Fehler in einem Rahmen stoppt die anderen nicht", function () {
+    var doc = FIX.doc({ facing: false });
+    var a = FIX.frame(doc.pages[0], [0, 0, 100, 100]);
+    var b = FIX.frame(doc.pages[0], [200, 100, 300, 200]);
+    var orig = BE.processFrame, aid = a.id, res;
+    BE.processFrame = function (frame, method, bleed) {
+        if (frame.id === aid) throw new Error("kaputt");
+        return orig(frame, method, bleed);
+    };
+    try { res = BE.process([a, b], "scale", B9); } finally { BE.processFrame = orig; }
+    check(res.done === 1, "1 bearbeitet");
+    check(res.skipped.length === 1 && res.skipped[0].reason === "Fehler: kaputt", "Fehlergrund");
+});
+
+test("runUndoable: ein Rueckgaengig-Schritt", function () {
+    var doc = FIX.doc({ facing: false, visible: true });
+    var f = FIX.frame(doc.pages[0], [0, 0, 100, 100]);
+    BE.runUndoable(function () {
+        BE.withSettings(doc, function () { BE.process([f], "mirror", B9); });
+    });
+    check(doc.groups.length === 1, "Gruppe angelegt");
+    doc.undo();
+    check(doc.groups.length === 0, "nach einem Undo keine Gruppe");
+    check(doc.rectangles.length === 1, "nur Original: " + doc.rectangles.length);
+});
+```
+
+- [ ] **Step 2: Tests laufen lassen** – Expected: FAIL (`BE.process` undefiniert).
+
+- [ ] **Step 3: Implementieren** – vor „Start“ einfügen:
+
+```js
+// ---------- Ablauf ----------
+
+BE.itemName = function (item) {
+    try {
+        if (item.allGraphics.length && item.allGraphics[0].itemLink) return item.allGraphics[0].itemLink.name;
+    } catch (e) {}
+    try { return item.constructor.name + " (ID " + item.id + ")"; } catch (e2) { return "Objekt"; }
+};
+
+BE.process = function (items, method, bleed) {
+    var res = { done: 0, skipped: [] }, seen = {}, i, r, reason;
+    for (i = 0; i < items.length; i++) {
+        r = BE.resolveFrame(items[i]);
+        if (r.frame) {
+            if (seen[r.frame.id]) continue;
+            seen[r.frame.id] = true;
+        }
+        reason = r.reason;
+        if (!reason) {
+            try { reason = BE.processFrame(r.frame, method, bleed); }
+            catch (e) { reason = "Fehler: " + e.message; }
+        }
+        if (reason) res.skipped.push({ name: BE.itemName(r.frame || items[i]), reason: reason });
+        else res.done++;
+    }
+    return res;
+};
+
+BE.formatSummary = function (res) {
+    var s = res.done + " Rahmen bearbeitet.", i;
+    if (res.skipped.length) {
+        s += "\n\n" + res.skipped.length + " übersprungen:";
+        for (i = 0; i < res.skipped.length; i++) {
+            s += "\n• " + res.skipped[i].name + ": " + res.skipped[i].reason;
+        }
+    }
+    return s;
+};
+
+BE.runUndoable = function (fn) {
+    app.doScript(fn, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT, "Beschnitt ergänzen");
+};
+
+BE.mm = function (pt) {
+    return (Math.round(pt * 25.4 / 72 * 100) / 100) + " mm";
+};
+
+BE.askMethod = function (bleed) {
+    var w = new Window("dialog", "Beschnitt ergänzen"), pm, pb, g, rScale, rMirror;
+    w.alignChildren = "fill";
+    pm = w.add("panel", undefined, "Methode");
+    pm.alignChildren = "left";
+    rScale = pm.add("radiobutton", undefined, "Skalieren");
+    rMirror = pm.add("radiobutton", undefined, "Spiegeln");
+    rScale.value = true;
+    pb = w.add("panel", undefined, "Beschnitt des Dokuments");
+    pb.alignChildren = "left";
+    pb.add("statictext", undefined, "Oben: " + BE.mm(bleed.top) + "    Unten: " + BE.mm(bleed.bottom));
+    pb.add("statictext", undefined, "Innen/Links: " + BE.mm(bleed.inside) + "    Außen/Rechts: " + BE.mm(bleed.outside));
+    g = w.add("group");
+    g.alignment = "right";
+    g.add("button", undefined, "Abbrechen", { name: "cancel" });
+    g.add("button", undefined, "OK", { name: "ok" });
+    if (w.show() !== 1) return null;
+    return rMirror.value ? "mirror" : "scale";
+};
+
+BE.run = function () {
+    var doc, sel, items = [], i, bleed, method, res, unit;
+    if (!app.documents.length) { alert("Es ist kein Dokument geöffnet."); return; }
+    doc = app.activeDocument;
+    sel = app.selection;
+    if (!sel.length) { alert("Bitte zuerst einen oder mehrere Bildrahmen auswählen."); return; }
+    for (i = 0; i < sel.length; i++) items.push(sel[i]);
+
+    unit = app.scriptPreferences.measurementUnit;
+    try {
+        app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+        bleed = BE.readBleed(doc);
+    } finally {
+        app.scriptPreferences.measurementUnit = unit;
+    }
+    if (!bleed.top && !bleed.bottom && !bleed.inside && !bleed.outside) {
+        alert("Im Dokument ist kein Beschnitt eingestellt.\n(Datei > Dokument einrichten)");
+        return;
+    }
+    method = BE.askMethod(bleed);
+    if (!method) return;
+
+    BE.runUndoable(function () {
+        res = BE.withSettings(doc, function () { return BE.process(items, method, bleed); });
+    });
+    alert(BE.formatSummary(res), "Beschnitt ergänzen");
+};
+```
+
+- [ ] **Step 4: Tests laufen lassen** – Expected: 0 fehlgeschlagen. Falls der Undo-Test scheitert, weil `doScript`-Undo bei diesem Dokument anders greift: Ursache mit superpowers:systematic-debugging klären, nicht den Test abschwächen.
+
+- [ ] **Step 5: install.sh und README**
+
+`install.sh`:
+
+```bash
+#!/bin/bash
+# Verlinkt das Script in alle gefundenen InDesign-Scripts-Panel-Ordner.
+set -e
+SRC="$(cd "$(dirname "$0")" && pwd)/Beschnitt_ergaenzen.jsx"
+found=0
+for d in "$HOME/Library/Preferences/Adobe InDesign"/*/*/Scripts/"Scripts Panel"; do
+  [ -d "$d" ] || continue
+  ln -sfn "$SRC" "$d/Beschnitt_ergaenzen.jsx"
+  echo "Installiert: $d"
+  found=1
+done
+[ "$found" = 1 ] || echo "Kein Scripts-Panel-Ordner gefunden. InDesign starten und Fenster > Hilfsprogramme > Skripte einmal öffnen."
+```
+
+`README.md`:
+
+```markdown
+# Beschnitt ergänzen (InDesign-Script)
+
+Ergänzt bei ausgewählten Bildrahmen (Bild, PDF, AI …) Beschnitt an den Kanten,
+die am Seitenrand liegen. Der Bund bei Doppelseiten bleibt frei.
+
+## Methoden
+- **Skalieren:** Rahmen wird in den Beschnitt erweitert. Reicht das Bild nicht,
+  wird es proportional um die Rahmenmitte so wenig wie nötig vergrößert.
+- **Spiegeln:** Gespiegelte Kopien als Streifen (und Ecken) im Beschnitt,
+  gruppiert mit dem unveränderten Original. Vektoren bleiben Vektoren.
+
+Alles lässt sich mit einem Schritt rückgängig machen.
+
+## Installation
+    ./install.sh
+Danach in InDesign: Fenster > Hilfsprogramme > Skripte > Benutzer > Beschnitt_ergaenzen.jsx
+
+## Nicht unterstützt
+Gedrehte/verzerrte oder nicht rechteckige Rahmen, Rahmen in Gruppen oder verankert,
+gesperrte Rahmen. Diese werden übersprungen und in der Zusammenfassung genannt.
+
+## Tests
+    test/run_tests.sh
+Steuert InDesign 2026 per AppleScript und arbeitet nur mit eigenen, unsichtbaren Testdokumenten.
+```
+
+- [ ] **Step 6: Installieren und manuell prüfen** – `chmod +x install.sh && ./install.sh`. Nutzer testet in InDesign: Dialog, Skalieren, Spiegeln, Undo, Meldungen bei fehlender Auswahl/fehlendem Beschnitt.
+- [ ] **Step 7: Commit** – `git add -A && git commit -m "Ablauf, Dialog, Installation"`
