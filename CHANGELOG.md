@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.2.1 – 2026-09-17
+- Dialog: more space between the panel titles ("Method", "Document bleed") and their options.
+
 ## 2.2.0 – 2026-09-17
 - The script is now **English by default**, regardless of the InDesign language.
 - New language selection (English / Deutsch) at the bottom of the dialog; the texts

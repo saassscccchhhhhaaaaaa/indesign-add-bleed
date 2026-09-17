@@ -1,6 +1,6 @@
 //@target indesign
 /*
-    AddBleed.jsx - Version 2.2.0
+    AddBleed.jsx - Version 2.2.1
     Author: Sascha Fronczek - https://saschafronczek.de
     License: MIT (see LICENSE) - Bugs and ideas: https://github.com/saassscccchhhhhaaaaaa/indesign-add-bleed/issues
 
@@ -12,7 +12,7 @@
 
 var BE = {};
 
-BE.VERSION = "2.2.0";
+BE.VERSION = "2.2.1";
 BE.AUTHOR = "Sascha Fronczek";
 BE.WEBSITE = "saschafronczek.de";
 
@@ -713,6 +713,7 @@ BE.askMethod = function (bleed) {
     w.alignChildren = "fill";
     pm = label(w.add("panel"), key("method"));
     pm.alignChildren = "left";
+    pm.margins = [15, 24, 15, 12]; // extra top space so the options sit below the panel title
     rScale = label(pm.add("radiobutton"), key("scale"));
     rMirror = label(pm.add("radiobutton"), key("mirror"));
     rFill = label(pm.add("radiobutton"), key("fill"));
@@ -737,6 +738,7 @@ BE.askMethod = function (bleed) {
 
     pb = label(w.add("panel"), key("bleedPanel"));
     pb.alignChildren = "left";
+    pb.margins = [15, 24, 15, 12];
     label(pb.add("statictext"), function () { return BE.t("bleedTopBottom", BE.mm(bleed.top), BE.mm(bleed.bottom)); })
         .preferredSize.width = 340;
     label(pb.add("statictext"), function () { return BE.t("bleedInOut", BE.mm(bleed.inside), BE.mm(bleed.outside)); })
