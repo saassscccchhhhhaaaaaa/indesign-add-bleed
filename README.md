@@ -2,6 +2,12 @@
 
 Version 2.2.0 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
 
+## Video
+
+[![Watch the video: Free InDesign script – add missing bleed in one click](https://img.youtube.com/vi/6Nsph7fr_Zw/maxresdefault.jpg)](https://youtu.be/6Nsph7fr_Zw)
+
+▶️ [Watch on YouTube: Free InDesign script – add missing bleed in one click](https://youtu.be/6Nsph7fr_Zw)
+
 ## What is it for?
 
 Images that run to the edge of the page ("full bleed") have to extend a little beyond
