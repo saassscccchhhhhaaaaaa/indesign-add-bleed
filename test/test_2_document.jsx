@@ -93,8 +93,23 @@ test("texts: German and English", function () {
         for (k in BE.STRINGS.en) if (BE.STRINGS.de[k] === undefined) missing.push(k);
         for (k in BE.STRINGS.de) if (BE.STRINGS.en[k] === undefined) missing.push(k);
         check(missing.length === 0, "keys missing in one language: " + missing.join(", "));
-        check(BE.detectLanguage() === "de" || BE.detectLanguage() === "en", "detectLanguage");
     } finally {
         BE.lang = saved;
     }
+});
+
+test("language: English by default, choice is saved and loaded", function () {
+    var f = File(FIX.out.fsName + "/tmp_settings/settings.txt");
+    if (f.exists) f.remove();
+    check(BE.loadLanguage(f) === "en", "default without file");
+    BE.saveLanguage("de", f);
+    check(f.exists, "file written");
+    check(BE.loadLanguage(f) === "de", "saved German is loaded");
+    BE.saveLanguage("en", f);
+    check(BE.loadLanguage(f) === "en", "saved English is loaded");
+    f.open("w"); f.write("lang=xx\n"); f.close();
+    check(BE.loadLanguage(f) === "en", "unknown language -> English");
+    f.remove();
+    f.parent.remove();
+    check(BE.settingsFile().fsName.indexOf("AddBleed") > 0, "settings path " + BE.settingsFile().fsName);
 });

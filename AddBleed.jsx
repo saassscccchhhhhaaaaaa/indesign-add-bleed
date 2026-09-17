@@ -1,18 +1,18 @@
 //@target indesign
 /*
-    AddBleed.jsx - Version 2.1.1
+    AddBleed.jsx - Version 2.2.0
     Author: Sascha Fronczek - https://saschafronczek.de
     License: MIT (see LICENSE) - Bugs and ideas: https://github.com/saassscccchhhhhaaaaaa/indesign-add-bleed/issues
 
     Adds bleed to the selected image frames on the edges that touch the page edge.
     Methods: scale, mirror, or fill via Photoshop (content-aware / generative).
-    The UI is German when InDesign runs in German, English otherwise.
+    The UI is English by default; German can be chosen in the dialog.
     Bounds are always [top, left, bottom, right] in points.
 */
 
 var BE = {};
 
-BE.VERSION = "2.1.1";
+BE.VERSION = "2.2.0";
 BE.AUTHOR = "Sascha Fronczek";
 BE.WEBSITE = "saschafronczek.de";
 
@@ -65,7 +65,8 @@ BE.STRINGS = {
         noDoc: "No document is open.",
         noSel: "Please select one or more image frames first.",
         noBleed: "The document has no bleed set.\n(File > Document Setup)",
-        object: "object"
+        object: "object",
+        language: "Language:"
     },
     de: {
         title: "Beschnitt erg\u00e4nzen",
@@ -109,15 +110,46 @@ BE.STRINGS = {
         noDoc: "Es ist kein Dokument ge\u00f6ffnet.",
         noSel: "Bitte zuerst einen oder mehrere Bildrahmen ausw\u00e4hlen.",
         noBleed: "Im Dokument ist kein Beschnitt eingestellt.\n(Datei > Dokument einrichten)",
-        object: "Objekt"
+        object: "Objekt",
+        language: "Sprache:"
     }
 };
 
-BE.detectLanguage = function () {
-    try { return String(app.locale).indexOf("GERMAN") === 0 ? "de" : "en"; } catch (e) { return "en"; }
+BE.LANGUAGES = [{ code: "en", name: "English" }, { code: "de", name: "Deutsch" }];
+
+// Settings file in the user's application data folder
+BE.settingsFile = function () {
+    return File(Folder.userData.fsName + "/AddBleed/settings.txt");
 };
 
-BE.lang = BE.detectLanguage();
+// Saved UI language; English if nothing (valid) is saved.
+BE.loadLanguage = function (file) {
+    var s, m;
+    file = file || BE.settingsFile();
+    try {
+        if (file.exists && file.open("r")) {
+            s = file.read();
+            file.close();
+            m = /lang=(\w+)/.exec(s);
+            if (m && BE.STRINGS[m[1]]) return m[1];
+        }
+    } catch (e) {}
+    return "en";
+};
+
+BE.saveLanguage = function (code, file) {
+    file = file || BE.settingsFile();
+    try {
+        file.parent.create();
+        file.encoding = "UTF-8";
+        if (file.open("w")) {
+            file.write("lang=" + code + "\n");
+            file.close();
+        }
+    } catch (e) {}
+};
+
+BE.lang = BE.loadLanguage();
 
 // Translated text for key; {0}, {1} ... are replaced by the further arguments.
 BE.t = function (key) {
@@ -661,23 +693,38 @@ BE.newWindow = function (type, title) {
 };
 
 // Dialog; returns "scale", "mirror", "fill-ca", "fill-gen" or null.
+// The language can be switched in the dialog; it is saved when the dialog is confirmed.
 BE.askMethod = function (bleed) {
-    var w = BE.newWindow("dialog", BE.t("title")), pm, pb, pf, g, rScale, rMirror, rFill, rCa, rGen, note, genNote, info;
+    var w = BE.newWindow("dialog", BE.t("title")), texts = [], oldLang = BE.lang;
+    var pm, pb, pf, pl, g, rScale, rMirror, rFill, rCa, rGen, note, genNote, info, langList, i;
+    // Remembers a control and how to build its text, so the texts can be switched live.
+    function label(ctrl, make) {
+        texts.push({ ctrl: ctrl, make: make });
+        ctrl.text = make();
+        return ctrl;
+    }
+    function key(k) { return function () { return BE.t(k); }; }
+    function relabel() {
+        for (var j = 0; j < texts.length; j++) texts[j].ctrl.text = texts[j].make();
+        w.text = BE.t("title");
+        w.layout.layout(true);
+    }
+
     w.alignChildren = "fill";
-    pm = w.add("panel", undefined, BE.t("method"));
+    pm = label(w.add("panel"), key("method"));
     pm.alignChildren = "left";
-    rScale = pm.add("radiobutton", undefined, BE.t("scale"));
-    rMirror = pm.add("radiobutton", undefined, BE.t("mirror"));
-    rFill = pm.add("radiobutton", undefined, BE.t("fill"));
+    rScale = label(pm.add("radiobutton"), key("scale"));
+    rMirror = label(pm.add("radiobutton"), key("mirror"));
+    rFill = label(pm.add("radiobutton"), key("fill"));
     pf = pm.add("group");
     pf.orientation = "column";
     pf.alignChildren = "left";
     pf.margins = [20, 0, 0, 0];
-    rCa = pf.add("radiobutton", undefined, BE.t("contentAware"));
-    rGen = pf.add("radiobutton", undefined, BE.t("generative"));
-    note = pf.add("statictext", undefined, BE.t("fillNote"), { multiline: true });
+    rCa = label(pf.add("radiobutton"), key("contentAware"));
+    rGen = label(pf.add("radiobutton"), key("generative"));
+    note = label(pf.add("statictext", undefined, "", { multiline: true }), key("fillNote"));
     note.preferredSize = [340, 34];
-    genNote = pf.add("statictext", undefined, BE.t("genNote"), { multiline: true });
+    genNote = label(pf.add("statictext", undefined, "", { multiline: true }), key("genNote"));
     genNote.preferredSize = [340, 34];
     rScale.value = true;
     rCa.value = true;
@@ -687,18 +734,42 @@ BE.askMethod = function (bleed) {
     }
     rScale.onClick = rMirror.onClick = rFill.onClick = rCa.onClick = rGen.onClick = sync;
     sync();
-    pb = w.add("panel", undefined, BE.t("bleedPanel"));
+
+    pb = label(w.add("panel"), key("bleedPanel"));
     pb.alignChildren = "left";
-    pb.add("statictext", undefined, BE.t("bleedTopBottom", BE.mm(bleed.top), BE.mm(bleed.bottom)));
-    pb.add("statictext", undefined, BE.t("bleedInOut", BE.mm(bleed.inside), BE.mm(bleed.outside)));
+    label(pb.add("statictext"), function () { return BE.t("bleedTopBottom", BE.mm(bleed.top), BE.mm(bleed.bottom)); })
+        .preferredSize.width = 340;
+    label(pb.add("statictext"), function () { return BE.t("bleedInOut", BE.mm(bleed.inside), BE.mm(bleed.outside)); })
+        .preferredSize.width = 340;
+
+    pl = w.add("group");
+    pl.alignment = "left";
+    label(pl.add("statictext"), key("language"));
+    langList = pl.add("dropdownlist");
+    for (i = 0; i < BE.LANGUAGES.length; i++) {
+        langList.add("item", BE.LANGUAGES[i].name);
+        if (BE.LANGUAGES[i].code === BE.lang) langList.selection = i;
+    }
+    if (!langList.selection) langList.selection = 0;
+    langList.onChange = function () {
+        if (!langList.selection) return;
+        BE.lang = BE.LANGUAGES[langList.selection.index].code;
+        relabel();
+    };
+
     info = w.add("statictext", undefined, "Version " + BE.VERSION + "  |  " + BE.AUTHOR + "  |  " + BE.WEBSITE);
     info.alignment = "left";
     info.enabled = false;
     g = w.add("group");
     g.alignment = "right";
-    g.add("button", undefined, BE.t("cancel"), { name: "cancel" });
+    label(g.add("button", undefined, "", { name: "cancel" }), key("cancel"));
     g.add("button", undefined, "OK", { name: "ok" });
-    if (w.show() !== 1) return null;
+
+    if (w.show() !== 1) {
+        BE.lang = oldLang;
+        return null;
+    }
+    BE.saveLanguage(BE.lang);
     if (rMirror.value) return "mirror";
     if (rFill.value) return rGen.value ? "fill-gen" : "fill-ca";
     return "scale";

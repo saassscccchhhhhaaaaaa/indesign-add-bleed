@@ -39,16 +39,37 @@ test("runUndoable: a single undo step", function () {
     check(doc.rectangles.length === 1, "only the original: " + doc.rectangles.length);
 });
 
-test("askMethod: dialog builds without errors and closes", function () {
-    var orig = BE.newWindow, res;
+test("askMethod: dialog builds, switches language live, cancel keeps the language", function () {
+    var orig = BE.newWindow, origSave = BE.saveLanguage, res, seen = {}, saved = [];
+    function find(c, type) {
+        if (c.type === type) return c;
+        for (var i = 0; c.children && i < c.children.length; i++) {
+            var r = find(c.children[i], type);
+            if (r) return r;
+        }
+        return null;
+    }
     BE.newWindow = function (type, title) {
         var w = orig(type, title);
-        if (type === "dialog") w.onShow = function () { w.close(1); };
+        if (type === "dialog") w.onShow = function () {
+            seen.before = w.text;
+            var dd = find(w, "dropdownlist");
+            seen.items = dd ? dd.items.length : 0;
+            if (dd) dd.selection = 1;
+            seen.after = w.text;
+            seen.cancel = find(w, "button").text;
+            w.close(2);
+        };
         return w;
     };
-    try { res = BE.askMethod(B9); } finally { BE.newWindow = orig; }
-    // close() inside onShow does not return the OK code in InDesign, so only the build is checked
-    check(res === null || res === "scale", "result " + res);
+    BE.saveLanguage = function (code) { saved.push(code); };
+    try { res = BE.askMethod(B9); } finally { BE.newWindow = orig; BE.saveLanguage = origSave; }
+    check(seen.before === "Add Bleed", "title before: " + seen.before);
+    check(seen.items === 2, "languages in list: " + seen.items);
+    check(seen.after === "Beschnitt erg\u00e4nzen", "title after switching: " + seen.after);
+    check(seen.cancel === "Abbrechen", "button text after switching: " + seen.cancel);
+    check(res === null && BE.lang === "en", "cancel restores the language: " + BE.lang);
+    check(saved.length === 0, "nothing saved on cancel");
 });
 
 test("progress: window can be updated and closed", function () {

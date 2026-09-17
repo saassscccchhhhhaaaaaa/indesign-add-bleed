@@ -1,6 +1,6 @@
 # Add Bleed (InDesign script)
 
-Version 2.1.1 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
+Version 2.2.0 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
 
 ## What is it for?
 
@@ -19,7 +19,8 @@ It reads the bleed from the document setup, detects which edges touch the page e
 margin – for one frame or many at once. It works with images as well as placed
 PDF and AI files.
 
-The Add Bleed script runs in English and German.
+The Add Bleed script runs in English and German – English by default, German can be
+chosen in the dialog.
 
 ### Which method when?
 
@@ -52,8 +53,7 @@ on disk).
 - Adobe InDesign 2026 (developed and tested on macOS with the German UI).
   InDesign 2025 and Windows should work but are not tested yet – feedback welcome.
 - For "Fill": Adobe Photoshop 2026 (tested with 27.10).
-- Languages: English and German (German when InDesign runs in German, English
-  for all other InDesign languages).
+- Languages: English (default) and German, selectable in the dialog.
 
 ## Installation
 
@@ -72,6 +72,9 @@ into all Scripts Panel folders it finds.
 
 Select one or more image frames, double-click the script, choose a method. A summary
 at the end lists what was processed and what was skipped.
+
+The language can be switched at the bottom of the dialog. The choice is remembered
+(stored in `AddBleed/settings.txt` in your user application data folder).
 
 **Not supported** (skipped and listed): rotated/skewed or non-rectangular frames,
 frames inside groups or anchored, locked frames. For "Fill" also missing or modified

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.0 – 2026-09-17
+- The script is now **English by default**, regardless of the InDesign language.
+- New language selection (English / Deutsch) at the bottom of the dialog; the texts
+  switch immediately and the choice is remembered for the next run.
+
 ## 2.1.1 – 2026-09-16
 - Fix: with **Mirror**, the mirrored strips got a 1 pt black stroke when the
   original frame had no stroke colour. They now never get a stroke.

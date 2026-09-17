@@ -31,3 +31,9 @@ desktop.ini
 
 # Testausgaben
 test/output/
+
+# Teaser / marketing material (videos, screenshots)
+Teaser/
+*.mp4
+*.mov
+*.focusee/
