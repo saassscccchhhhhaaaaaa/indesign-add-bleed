@@ -19,6 +19,8 @@ It reads the bleed from the document setup, detects which edges touch the page e
 margin – for one frame or many at once. It works with images as well as placed
 PDF and AI files.
 
+The Add Bleed script runs in English and German.
+
 ### Which method when?
 
 | Method | Good for | Result |
@@ -50,6 +52,8 @@ on disk).
 - Adobe InDesign 2026 (developed and tested on macOS with the German UI).
   InDesign 2025 and Windows should work but are not tested yet – feedback welcome.
 - For "Fill": Adobe Photoshop 2026 (tested with 27.10).
+- Languages: English and German (German when InDesign runs in German, English
+  for all other InDesign languages).
 
 ## Installation
 
@@ -68,8 +72,6 @@ into all Scripts Panel folders it finds.
 
 Select one or more image frames, double-click the script, choose a method. A summary
 at the end lists what was processed and what was skipped.
-
-The dialogs are in German when InDesign runs in German, and in English otherwise.
 
 **Not supported** (skipped and listed): rotated/skewed or non-rectangular frames,
 frames inside groups or anchored, locked frames. For "Fill" also missing or modified
