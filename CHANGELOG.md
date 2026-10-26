@@ -1,12 +1,15 @@
 # Changelog
 
 ## 2.3.0 – 2026-10-26
-- **Generative fill works again** on Photoshop 27.11.0 and 28.0.1. On Photoshop 27.10
-  and older, use version 2.2.1 instead – the parameters are not interchangeable. Photoshop 27.11 changed the parameters of the
-  undocumented command: `workflowType`, `serviceVersion`, a `gemini` block and a
-  service map were added, `gi_ADVANCED` was dropped and `documentID`/`layerID` became
-  `DocI`/`LyrI`. The descriptor was read from a recorded Photoshop action.
-- If a future update changes it again, the frame is still skipped with a clear message.
+- **Generative fill works again** – verified on Photoshop 27.11.0 and 28.0.1.
+  Photoshop 27.11 changed the parameters of the undocumented command: `workflowType`,
+  `serviceVersion`, a `gemini` block and a workflow/service map were added, `gi_MODE`
+  and `gi_SEED` joined the clio options, `gi_ADVANCED` was dropped and
+  `documentID`/`layerID` became `DocI`/`LyrI`. The parameters were read from a
+  recorded Photoshop action.
+- On **Photoshop 27.10 and older**, use version 2.2.1 instead – the old and new
+  parameters are not interchangeable.
+- If a future update changes this again, the frame is still skipped with a clear message.
 
 ## 2.2.3 – 2026-10-26
 - Clearer wording for the generative-fill failure: it no longer blames the Photoshop
