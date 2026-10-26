@@ -47,7 +47,7 @@ chosen in the dialog.
   (local, free) or *generative* (**experimental**: needs internet, uses generative
   credits and relies on an undocumented Photoshop function, so a Photoshop update can
   break it at any time – the script then says so and skips the frame instead of
-  failing silently). The result is saved as `Name_bleed.psd` with layers next to the
+  failing silently; see Requirements for which script version matches which Photoshop). The result is saved as `Name_bleed.psd` with layers next to the
   original and the frame is relinked to it; the original file is never changed.
   PDF/AI files are rasterised at 300 ppi. If the image already covers the bleed,
   only the frame is extended.
@@ -59,8 +59,15 @@ on disk).
 
 - Adobe InDesign 2026 (developed and tested on macOS with the German UI).
   InDesign 2025 and Windows should work but are not tested yet – feedback welcome.
-- For "Fill": Adobe Photoshop (tested with 27.10, 27.11 and 28.0.1).
-  Generative fill is matched to Photoshop 27.11; older or newer versions may reject it.
+- For "Fill": Adobe Photoshop. Content-aware fill is tested with 27.10, 27.11 and 28.0.1.
+- **Generative fill depends on your Photoshop version:**
+  - **Photoshop 27.11 or newer** – use the current version of the script (tested on
+    27.11.0 and 28.0.1).
+  - **Photoshop 27.10 or older** – use [version 2.2.1](../../releases/tag/v2.2.1)
+    instead. Photoshop changed the parameters of this undocumented command in 27.11,
+    so the two are not interchangeable.
+  - Scale, Mirror and content-aware fill work the same in every version, so for those
+    the current script is always the right one.
 - Languages: English (default) and German, selectable in the dialog.
 
 ## Installation
