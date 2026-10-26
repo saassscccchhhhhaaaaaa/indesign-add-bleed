@@ -1,6 +1,6 @@
 # Add Bleed (InDesign script)
 
-Version 2.2.2 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
+Version 2.2.3 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
 
 ## Video
 
@@ -45,9 +45,9 @@ chosen in the dialog.
   grouped with the unchanged original.
 - **Fill (Photoshop):** The missing image is added in Photoshop – *content-aware*
   (local, free) or *generative* (**experimental**: needs internet, uses generative
-  credits and relies on an undocumented Photoshop function). **Generative fill stopped
-  working with Photoshop 28.0.1** – Adobe changed that internal function. The script
-  says so and skips the frame; content-aware is unaffected. The result is saved as `Name_bleed.psd` with layers next to the
+  credits and relies on an undocumented Photoshop function). **Generative fill is
+  currently broken**: Photoshop rejects the request on 27.11.0 and on 28.0.1 (it worked
+  on 27.10). The script says so and skips the frame; content-aware is unaffected. The result is saved as `Name_bleed.psd` with layers next to the
   original and the frame is relinked to it; the original file is never changed.
   PDF/AI files are rasterised at 300 ppi. If the image already covers the bleed,
   only the frame is extended.
@@ -59,8 +59,8 @@ on disk).
 
 - Adobe InDesign 2026 (developed and tested on macOS with the German UI).
   InDesign 2025 and Windows should work but are not tested yet – feedback welcome.
-- For "Fill": Adobe Photoshop (content-aware tested with 27.10 and 28.0.1).
-  Generative fill worked up to Photoshop 27.10 and is broken in 28.0.1.
+- For "Fill": Adobe Photoshop (content-aware tested with 27.10, 27.11 and 28.0.1).
+  Generative fill worked on 27.10 and is currently broken on 27.11 and 28.0.1.
 - Languages: English (default) and German, selectable in the dialog.
 
 ## Installation

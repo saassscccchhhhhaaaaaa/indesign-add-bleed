@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.3 – 2026-10-26
+- Clearer wording for the generative-fill failure: it no longer blames the Photoshop
+  version, because Photoshop rejects the request on 27.11.0 and 28.0.1 alike.
+
 ## 2.2.2 – 2026-10-26
 - Generative fill no longer shows a raw Photoshop error. Adobe changed the
   undocumented command in **Photoshop 28.0.1**, so the frame is now skipped with a
