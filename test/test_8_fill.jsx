@@ -47,3 +47,18 @@ test("process: fill reports new PSD files", function () {
     check(calls.join(",") === "1/1", "progress " + calls.join(","));
     check(BE.formatSummary(res).indexOf("1 new PSD file") > 0, BE.formatSummary(res));
 });
+
+// Generative fill uses an undocumented Photoshop command. If a Photoshop update
+// changes it, the frame must be skipped with a readable reason - never a raw
+// Photoshop error and never an exception. (Broken since Photoshop 28.0.1.)
+test("fill: generative either works or is skipped with a clear reason", function () {
+    var doc = FIX.doc({ facing: false });
+    var f = FIX.frame(doc.pages[0], [0, 0, 100, 100]);
+    var r = BE.processFrame(f, "fill-gen", B9);
+    if (r === null) {
+        check(/_bleed(-\d+)?\.psd$/.test(f.allGraphics[0].itemLink.name), "relinked: " + f.allGraphics[0].itemLink.name);
+        return;
+    }
+    check(r === "Photoshop: " + BE.t("genFillUnsupported"), "reason: " + r);
+    near(f.geometricBounds, [0, 0, 100, 100], "frame unchanged when skipped");
+});

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.2 – 2026-10-26
+- Generative fill no longer shows a raw Photoshop error. Adobe changed the
+  undocumented command in **Photoshop 28.0.1**, so the frame is now skipped with a
+  clear message pointing to content-aware fill.
+- Content-aware fill, scale and mirror are unaffected.
+
 ## 2.2.1 – 2026-09-17
 - Dialog: more space between the panel titles ("Method", "Document bleed") and their options.
 

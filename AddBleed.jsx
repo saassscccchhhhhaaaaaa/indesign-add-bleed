@@ -1,6 +1,6 @@
 //@target indesign
 /*
-    AddBleed.jsx - Version 2.2.1
+    AddBleed.jsx - Version 2.2.2
     Author: Sascha Fronczek - https://saschafronczek.de
     License: MIT (see LICENSE) - Bugs and ideas: https://github.com/saassscccchhhhhaaaaaa/indesign-add-bleed/issues
 
@@ -12,7 +12,7 @@
 
 var BE = {};
 
-BE.VERSION = "2.2.1";
+BE.VERSION = "2.2.2";
 BE.AUTHOR = "Sascha Fronczek";
 BE.WEBSITE = "saschafronczek.de";
 
@@ -66,6 +66,7 @@ BE.STRINGS = {
         noSel: "Please select one or more image frames first.",
         noBleed: "The document has no bleed set.\n(File > Document Setup)",
         object: "object",
+        genFillUnsupported: "generative fill is not available in this Photoshop version (Adobe changed an internal function) \u2013 please use content-aware",
         language: "Language:"
     },
     de: {
@@ -111,6 +112,7 @@ BE.STRINGS = {
         noSel: "Bitte zuerst einen oder mehrere Bildrahmen ausw\u00e4hlen.",
         noBleed: "Im Dokument ist kein Beschnitt eingestellt.\n(Datei > Dokument einrichten)",
         object: "Objekt",
+        genFillUnsupported: "Generatives F\u00fcllen steht in dieser Photoshop-Version nicht zur Verf\u00fcgung (Adobe hat eine interne Funktion ge\u00e4ndert) \u2013 bitte inhaltsbasiert verwenden",
         language: "Sprache:"
     }
 };
@@ -461,7 +463,12 @@ BE.psJob = function (p) {
             d.putString(s("prompt"), "");
             d.putString(s("serviceID"), "clio");
             d.putObject(s("serviceOptionsList"), s("target"), opts);
-            executeAction(s("syntheticFill"), d, DialogModes.NO);
+            // Undocumented command: a Photoshop update can change its parameters.
+            try {
+                executeAction(s("syntheticFill"), d, DialogModes.NO);
+            } catch (eGen) {
+                return "error|" + p.msg.genFillUnsupported;
+            }
         } else {
             // Content-Aware Fill on a separate layer that only keeps the filled area
             layer = doc.activeLayer.duplicate();
@@ -606,7 +613,10 @@ BE.applyFill = function (frame, fb, tb, mode) {
     params = {
         src: src.fsName, dst: dst, need: need, mode: mode,
         isPdf: g.constructor.name === "PDF", pdfPage: 1, pdfCrop: "BOUNDINGBOX",
-        msg: { fileMissing: BE.t("psFileMissing"), fileOpen: BE.t("psFileOpen") }
+        msg: {
+            fileMissing: BE.t("psFileMissing"), fileOpen: BE.t("psFileOpen"),
+            genFillUnsupported: BE.t("genFillUnsupported")
+        }
     };
     if (params.isPdf) {
         params.pdfPage = g.pdfAttributes.pageNumber;
