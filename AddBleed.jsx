@@ -1,6 +1,6 @@
 //@target indesign
 /*
-    AddBleed.jsx - Version 2.2.3
+    AddBleed.jsx - Version 2.3.0
     Author: Sascha Fronczek - https://saschafronczek.de
     License: MIT (see LICENSE) - Bugs and ideas: https://github.com/saassscccchhhhhaaaaaa/indesign-add-bleed/issues
 
@@ -12,7 +12,7 @@
 
 var BE = {};
 
-BE.VERSION = "2.2.3";
+BE.VERSION = "2.3.0";
 BE.AUTHOR = "Sascha Fronczek";
 BE.WEBSITE = "saschafronczek.de";
 
@@ -393,7 +393,7 @@ BE.pdfCropName = function (crop) {
 // p = {src, dst, need, mode, isPdf, pdfPage, pdfCrop, msg: {fileMissing, fileOpen}}
 BE.psJob = function (p) {
     var saved = { dialogs: app.displayDialogs, units: app.preferences.rulerUnits };
-    var doc = null, src = File(p.src), i, fn, po, w, h, add, ov, r, layer, d, ref, clio, opts, so;
+    var doc = null, src = File(p.src), i, fn, po, w, h, add, ov, r, layer, d, ref, clio, opts, map, so;
     function s(id) { return stringIDToTypeID(id); }
     function c(id) { return charIDToTypeID(id); }
     try {
@@ -440,11 +440,14 @@ BE.psJob = function (p) {
         doc.selection.select([[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]], SelectionType.DIMINISH);
 
         if (p.mode === "generative") {
-            // Generative Fill (undocumented descriptor, empty prompt)
+            // Generative Fill. The command is undocumented; these parameters were read
+            // from an action recorded in Photoshop 27.11 and change between versions.
             ref = new ActionReference();
             ref.putEnumerated(s("document"), s("ordinal"), s("targetEnum"));
             clio = new ActionDescriptor();
             clio.putString(s("gi_PROMPT"), "");
+            clio.putString(s("gi_MODE"), "ginp");
+            clio.putInteger(s("gi_SEED"), -1);
             clio.putInteger(s("gi_NUM_STEPS"), -1);
             clio.putInteger(s("gi_GUIDANCE"), 6);
             clio.putInteger(s("gi_SIMILARITY"), 0);
@@ -453,17 +456,29 @@ BE.psJob = function (p) {
             clio.putInteger(s("gi_CONTENT_PRESERVE"), 0);
             clio.putBoolean(s("gi_ENABLE_PROMPT_FILTER"), true);
             clio.putBoolean(s("dualCrop"), true);
-            clio.putString(s("gi_ADVANCED"), '{"enable_mts":true}');
             opts = new ActionDescriptor();
+            opts.putObject(s("gemini"), s("gemini"), new ActionDescriptor());
             opts.putObject(s("clio"), s("clio"), clio);
+            map = new ActionDescriptor();
+            map.putString(s("gen_harmonize"), "gen_harmonize");
+            map.putString(s("generativeUpscale"), "clio_f16_async");
+            map.putString(s("instruct_edit"), "clio3");
+            map.putString(s("text_to_image"), "clio3");
+            map.putString(s("generate_similar"), "clio3");
+            map.putString(s("prompt_to_edit"), "nano_banana_2");
+            map.putString(s("out_painting"), "me_md");
+            map.putString(s("generate_background"), "clio3");
+            map.putString(s("in_painting"), "me_md");
             d = new ActionDescriptor();
             d.putReference(s("null"), ref);
-            d.putInteger(s("documentID"), doc.id);
-            d.putInteger(s("layerID"), doc.activeLayer.id);
+            d.putInteger(c("DocI"), doc.id);
+            d.putInteger(c("LyrI"), doc.activeLayer.id);
             d.putString(s("prompt"), "");
             d.putString(s("serviceID"), "clio");
-            d.putObject(s("serviceOptionsList"), s("target"), opts);
-            // Undocumented command: a Photoshop update can change its parameters.
+            d.putEnumerated(s("workflowType"), s("genWorkflow"), s("in_painting"));
+            d.putObject(s("serviceOptionsList"), s("null"), opts);
+            d.putString(s("serviceVersion"), "me_md");
+            d.putObject(s("workflow_to_active_service_identifier_map"), s("null"), map);
             try {
                 executeAction(s("syntheticFill"), d, DialogModes.NO);
             } catch (eGen) {

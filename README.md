@@ -1,6 +1,6 @@
 # Add Bleed (InDesign script)
 
-Version 2.2.3 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
+Version 2.3.0 | Author: Sascha Fronczek | [saschafronczek.de](https://saschafronczek.de) | License: [MIT](LICENSE) | free
 
 ## Video
 
@@ -35,7 +35,7 @@ chosen in the dialog.
 | **Scale** | images with some room around the subject | image slightly larger, crop shifts a little |
 | **Mirror** | flat areas, sky, patterns, vector art, PDFs | artwork untouched, edge is mirrored; vectors stay vectors |
 | **Fill – content-aware** | photos where nothing of the subject may be lost | Photoshop extends the edge to match the image (local, free) |
-| **Fill – generative** | difficult images where content-aware isn't enough | Photoshop AI invents the edge (**currently broken in Photoshop 28**, see below) |
+| **Fill – generative** | difficult images where content-aware isn't enough | Photoshop AI invents the edge (experimental, uses credits) |
 
 ## Methods in detail
 
@@ -45,9 +45,9 @@ chosen in the dialog.
   grouped with the unchanged original.
 - **Fill (Photoshop):** The missing image is added in Photoshop – *content-aware*
   (local, free) or *generative* (**experimental**: needs internet, uses generative
-  credits and relies on an undocumented Photoshop function). **Generative fill is
-  currently broken**: Photoshop rejects the request on 27.11.0 and on 28.0.1 (it worked
-  on 27.10). The script says so and skips the frame; content-aware is unaffected. The result is saved as `Name_bleed.psd` with layers next to the
+  credits and relies on an undocumented Photoshop function, so a Photoshop update can
+  break it at any time – the script then says so and skips the frame instead of
+  failing silently). The result is saved as `Name_bleed.psd` with layers next to the
   original and the frame is relinked to it; the original file is never changed.
   PDF/AI files are rasterised at 300 ppi. If the image already covers the bleed,
   only the frame is extended.
@@ -59,8 +59,8 @@ on disk).
 
 - Adobe InDesign 2026 (developed and tested on macOS with the German UI).
   InDesign 2025 and Windows should work but are not tested yet – feedback welcome.
-- For "Fill": Adobe Photoshop (content-aware tested with 27.10, 27.11 and 28.0.1).
-  Generative fill worked on 27.10 and is currently broken on 27.11 and 28.0.1.
+- For "Fill": Adobe Photoshop (tested with 27.10, 27.11 and 28.0.1).
+  Generative fill is matched to Photoshop 27.11; older or newer versions may reject it.
 - Languages: English (default) and German, selectable in the dialog.
 
 ## Installation
